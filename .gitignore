@@ -1,0 +1,11 @@
+# road data and caches (downloaded / generated locally)
+data/
+
+# Python
+__pycache__/
+*.pyc
+
+# run outputs
+*.log
+results_*.json
+results*.csv
