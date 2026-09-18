@@ -60,7 +60,8 @@ A plain-language glossary. Items marked (impl.) are implemented in this reposito
 ## Algebra
 
 - **(min, +) semiring.** Shortest paths combine paths with `+` and choose between them with `min`.
-- **Vertex elimination / Gaussian elimination for path problems** (Carré 1971; Tarjan 1981). Eliminating vertices one by one while updating their neighbours. Exact whenever there is no negative cycle — which is why CCH customization works with negative weights.
+- **Vertex elimination / Gaussian elimination for path problems** (Carré 1971; Tarjan 1981; survey: Rote 1990). Eliminating vertices one by one, adding short-cut arcs between their neighbours. Exact whenever there is no negative cycle — which is why CCH customization works with negative weights. Rote §4.5 describes exactly this "short-cut arc" view, with nested-dissection orders.
+- **Ordered semiring.** An algebra with a "choose" operation and a "chain" operation that behave like `min`/`+` (Rote §3). The elimination theory holds for every such algebra, including the battery algebra (max, ∘).
 
 ## Battery-constrained routing
 

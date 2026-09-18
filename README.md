@@ -2,7 +2,17 @@
 
 Shortest paths on road networks with **negative edge weights**, motivated by energy-optimal routing for electric vehicles, where regenerative braking makes downhill segments cost negative energy.
 
-The core question: can **Customizable Contraction Hierarchies (CCH)** handle negative weights *without* first computing a potential (Johnson / Bellman–Ford reweighting)? This repository contains a working answer, with proofs and experiments, shared as an **open technical log for review**. Whether the observation is already known in the CCH community is not yet confirmed. Pointers to prior work are very welcome — please open an issue.
+The core question: can **Customizable Contraction Hierarchies (CCH)** handle negative weights *without* first computing a potential (Johnson / Bellman–Ford reweighting)?
+
+The answer is yes, and it follows from **classical theory**. Algebraic path-problem theory shows that eliminating vertices while adding short-cut arcs, in any order including nested-dissection orders, is exact for shortest paths with negative arc weights as long as there is no negative cycle. See [Rote, *Path Problems in Graphs*, 1990](https://page.mi.fu-berlin.de/rote/Papers/pdf/Path+problems+in+graphs.pdf), §2.1, §4.2–4.5; and Carré 1971; Lipton, Rose & Tarjan 1979; Tarjan 1981.
+
+This repository does **not** claim a new algorithm. It contributes:
+
+- the explicit connection: modern CCH, whose literature assumes non-negative weights, inherits this property;
+- the practical consequences (queries, updates, cycle checks);
+- an implementation with tests and experiments on road networks.
+
+It is shared as an **open technical log for review**. If this application to CCH is already documented or considered folklore, please open an issue and point me to it.
 
 ## Key observation
 
@@ -10,9 +20,9 @@ The core question: can **Customizable Contraction Hierarchies (CCH)** handle neg
 
       ℓ⁺(v,w) ← min(ℓ⁺(v,w), ℓ⁺(v,u) + ℓ⁺(u,w))
 
-  This is vertex elimination in the (min, +) algebra, which is exact for any weights *without negative cycles* (Carré 1971, Tarjan 1981).
+  This is vertex elimination in the (min, +) semiring. After the lower vertices are eliminated, a shortcut stores the best path through lower-ranked vertices (Rote §4.3), which is exact whenever there are no negative cycles (Rote §4, Theorems 1–4).
 - **Query.** The elimination-tree query relaxes a small ancestor DAG in rank order. It needs no priority queue and no Dijkstra stopping rule, which are exactly the parts that fail with negative weights.
-- **Negative cycles.** A negative cycle exists **iff** some shortcut has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0`. After an update, only the changed shortcuts need checking.
+- **Negative cycles.** A negative cycle exists **iff** some shortcut has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0`. This is a CCH form of the classical pivot sign test (Rote §4.4). After an update, only the changed shortcuts need checking.
 - **Updates.** Partial re-customization recomputes affected shortcuts from their lower triangles, in rank order.
 
 Proofs, complexity and limitations are in [`docs/technical_note.md`](docs/technical_note.md). Every algorithm used here is explained in [`docs/algorithms.md`](docs/algorithms.md).
@@ -47,7 +57,7 @@ Full tables are in [`results/`](results/). Absolute times are Python times; comp
 
 ## Battery constraints (early work)
 
-With a battery of capacity M, each road maps state of charge `b ↦ min(out, b − cost)` for `b ≥ in`. These 3-parameter functions are closed under composition. Together with pointwise max, they satisfy what CCH customization needs, since no loop can gain charge. See `cch_battery.py`.
+With a battery of capacity M, each road maps state of charge `b ↦ min(out, b − cost)` for `b ≥ in`. The charge functions are those of Eisner, Funke & Storandt (2011). They are closed under composition, and together with pointwise max they form an ordered semiring. The general elimination theory (Rote §3–4) therefore applies, since no loop can gain charge. See `cch_battery.py`.
 
 Validated so far on small graphs only: 15,540 checks against step-by-step simulation and a label-correcting reference search. Large-graph experiments are pending.
 

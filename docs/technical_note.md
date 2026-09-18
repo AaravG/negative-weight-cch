@@ -8,7 +8,7 @@
 
 ## Abstract
 
-Shortest-path problems with negative edge weights arise in road networks, most prominently in energy-optimal routing for electric vehicles (EVs), where recuperation on downhill segments yields negative energy costs. Existing speed-up techniques for this setting first transform the weights with a feasible *potential* (Johnson's reweighting, or a height-induced potential) so that Dijkstra-based preprocessing and queries become applicable. We observe that *Customizable Contraction Hierarchies* (CCH), whose literature assumes non-negative weights, remain exact for arbitrary *conservative* weights (weights without negative cycles; if the metric is not conservative, shortest paths are undefined and no potential exists either) when the customization is the standard lower-triangle relaxation and queries use the elimination-tree algorithm. No potential and no Bellman–Ford computation are needed. Customization additionally yields an exact negative-cycle test (after an update, only the re-evaluated arcs need checking), and partial re-customization supports traffic-style updates on negative-weight metrics. On the DIMACS New York and San Francisco Bay road networks, with two different negative-weight metrics (10–20% negative arcs), our pure-Python prototype answers all 400 test queries exactly. Queries are 150–620× faster than Johnson + Dijkstra and 30–150× faster than Johnson + ALT A*. A new metric is customized in 0.9–1.6 s, versus 9–14 s for Johnson's Bellman–Ford plus ALT landmarks, and single-arc updates take under a millisecond.
+Shortest-path problems with negative edge weights arise in road networks, most prominently in energy-optimal routing for electric vehicles (EVs), where recuperation on downhill segments yields negative energy costs. Existing speed-up techniques for this setting first transform the weights with a feasible *potential* (Johnson's reweighting, or a height-induced potential) so that Dijkstra-based preprocessing and queries become applicable. We point out that *Customizable Contraction Hierarchies* (CCH), whose literature assumes non-negative weights, remain exact for arbitrary *conservative* weights (weights without negative cycles; if the metric is not conservative, shortest paths are undefined and no potential exists either) when the customization is the standard lower-triangle relaxation and queries use the elimination-tree algorithm. No potential and no Bellman–Ford computation are needed. Customization additionally yields an exact negative-cycle test (after an update, only the re-evaluated arcs need checking), and partial re-customization supports traffic-style updates on negative-weight metrics. On the DIMACS New York and San Francisco Bay road networks, with two different negative-weight metrics (10–20% negative arcs), our pure-Python prototype answers all 400 test queries exactly. Queries are 150–620× faster than Johnson + Dijkstra and 30–150× faster than Johnson + ALT A*. A new metric is customized in 0.9–1.6 s, versus 9–14 s for Johnson's Bellman–Ford plus ALT landmarks, and single-arc updates take under a millisecond.
 
 ---
 
@@ -25,12 +25,28 @@ The standard remedy is **potential shifting**. A potential `p` with `w(u,v) + p(
 
 **Contributions.**
 
-1. We show that basic CCH customization, together with the elimination-tree query, is exact for every conservative metric (Theorem 1, Theorem 2). No potential is required.
+1. We make explicit that basic CCH customization, together with the elimination-tree query, is exact for every conservative metric (Theorem 1, Theorem 2). No potential is required. This is a consequence of classical elimination theory (see below); we give self-contained proofs in CCH terminology.
 2. We show that after customization a negative cycle exists **iff** some contracted arc `{v,w}` has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0` (Theorem 3). Negative-cycle detection thus comes for free.
 3. We give a partial re-customization procedure that recomputes affected arcs from their lower triangles, and prove it yields exactly the fully customized metric (Theorem 4).
 4. We evaluate a prototype on DIMACS road graphs with two negative-weight metrics. We compare against Johnson + Dijkstra, Johnson + ALT A*, bidirectional ALT, and domain-potential A*, including a full-USA study (24M vertices) of the potential-based approaches.
 
-The underlying algebra — vertex elimination / Gaussian elimination for path problems in the (min, +) semiring, which is valid without negative cycles — is classical [Carré 1971; Tarjan 1981]. Our point is that it transfers unchanged to the CCH toolchain. This removes the potential-computation step that the negative-weight route-planning literature has relied on so far.
+**Relation to classical work (important).** The mathematical core is not new. Algebraic path-problem theory [Carré 1971; Lipton, Rose & Tarjan 1979; Tarjan 1981; Rote 1990] establishes all of the following:
+
+- Shortest paths may have negative arc weights. Rote's running example has arcs of weight −1 and −5 (§2.1).
+- The path equations have a solution iff there is no negative cycle (§4).
+- Gauss/Gauss–Jordan vertex elimination in any order yields the solution whenever the pivot closures exist, which for shortest paths means no negative cycles (§4.2, Theorems 1–4).
+- After eliminating vertices `1…k`, the entry `a_ij` is the best `i–j` path whose intermediate vertices lie in `{1…k}` (§4.3). This is exactly the meaning of a customized CCH shortcut.
+- Eliminating a vertex is equivalent to inserting short-cut arcs between its in- and out-neighbours (§4.5, Fig. 3). Nested-dissection orders make this efficient on sparse graphs (§4.5, citing Lipton & Tarjan).
+- An LU-type variant satisfies `A* = U*L*` (§4.4), which corresponds to combining an upward and a downward search.
+- For shortest paths, the pivot closure reduces to a sign test (§4.4), which is how negative cycles manifest.
+
+CCH customization is precisely this sparse elimination, restricted to the chordal supergraph. What we add is therefore not new mathematics but:
+
+1. the explicit observation that the CCH toolchain inherits this property, which the CCH literature does not state (it assumes weights ≥ 0) and which the negative-weight route-planning literature does not use (it computes potentials first);
+2. the CCH-specific consequences: the elimination-tree query as the potential-free query, the 2-cycle form of the negative-cycle test with its update-local variant, and partial re-customization on negative metrics;
+3. an implementation and experiments on road networks, including a battery-constrained variant in the (max, ∘) semiring, to which the general theory for ordered semirings (Rote §3–4) applies.
+
+We have not found this application stated in the route-planning literature, but it may be known to experts. Pointers are welcome.
 
 **Scope.** We treat the *unconstrained* shortest-path problem with conservative weights. Energy-optimal EV routing with battery-capacity constraints (a state of charge bounded in `[0, M]`) is not a plain shortest-path problem; Baum et al. handle it with piecewise cost functions. Extending the present approach to that setting is future work.
 
@@ -282,7 +298,7 @@ A potential-free CCH for the full USA graph was not built. The prototype's in-me
 ## 7 Related work
 
 - **Negative-weight SSSP.** Classical Bellman–Ford and Goldberg's scaling algorithm, and recent near-linear algorithms [Bernstein, Nanongkai & Wulff-Nilsen 2022; Bringmann, Cassis & Fischer 2023] with engineered implementations [2025]. Tree-depth-parameterized negative-cycle detection [Iwata, Ogasawara & Ohsaka 2017] is closest in spirit, since it also exploits elimination structure.
-- **Path algebras and elimination.** Carré (1971); Tarjan, "Fast algorithms for solving path problems" (1981); nested dissection for path-algebra problems.
+- **Path algebras and elimination.** Carré (1971); Lipton, Rose & Tarjan (1979); Tarjan (1981); Rote (1990), who gives a self-contained survey covering negative weights, elimination with short-cut arcs, nested dissection and LU-type factorization. This is the theory our correctness results specialize.
 - **EV routing.** Eisner, Funke & Storandt (AAAI 2011) use Johnson shifting plus CH. Baum, Dibbelt, Pajor & Wagner (Algorithmica 2020) use height-induced potentials, CH, and battery constraints. Recent A*-based work covers resource-constrained search with negative weights (ESA 2025) and profile search (AAAI 2026).
 - **Route planning.** ALT [Goldberg & Harrelson 2005]; CH [Geisberger et al. 2008]; CRP [Delling et al. 2011], which has been extended to EV energy; CCH [Dibbelt, Strasser & Wagner 2016]; CCH survey [Bläsius, Buchhold, Wagner, Zeitz & Zündorf 2025]; inertial flow [Schild & Sommer 2015]; FlowCutter [Hamann & Strasser].
 - **Bidirectional and parallel A*.** Ikeda et al. (1994); two-thread bidirectional A* implementations.
@@ -306,5 +322,7 @@ All code is in this repository (see the top-level README). Raw results are in `r
 - Iwata, Ogasawara, Ohsaka. On the Power of Tree-Depth for Fully Polynomial FPT Algorithms. STACS 2018 (arXiv:1710.04376).
 - Johnson. Efficient algorithms for shortest paths in sparse networks. JACM 1977.
 - Schild, Sommer. On balanced separators in road networks. SEA 2015.
-- Tarjan. Fast algorithms for solving path problems. JACM 1981.
+- Tarjan. Fast algorithms for solving path problems. JACM 28(3), 1981.
+- Rote. Path problems in graphs. In: Computational Graph Theory, Computing Supplementum 7, Springer, 1990, pp. 155–189. https://page.mi.fu-berlin.de/rote/Papers/pdf/Path+problems+in+graphs.pdf
+- Lipton, Rose, Tarjan. Generalized nested dissection. SIAM J. Numer. Anal. 16(2), 1979.
 - 9th DIMACS Implementation Challenge – Shortest Paths.
