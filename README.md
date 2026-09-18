@@ -14,6 +14,8 @@ This repository does **not** claim a new algorithm. It contributes:
 
 It is shared as an **open technical log for review**. If this application to CCH is already documented or considered folklore, please open an issue and point me to it.
 
+![CCH pipeline for negative edge weights](docs/images/pipeline.png)
+
 ## Key observation
 
 - **Customization.** CCH processes lower triangles in rank order:
@@ -28,6 +30,10 @@ It is shared as an **open technical log for review**. If this application to CCH
 Proofs, complexity and limitations are in [`docs/technical_note.md`](docs/technical_note.md). Every algorithm used here is explained in [`docs/algorithms.md`](docs/algorithms.md).
 
 ## Results (pure Python, single-threaded)
+
+![Summary of test results](docs/images/results.png)
+
+All statistics (every table from every run) are in [`docs/test_statistics.pdf`](docs/test_statistics.pdf).
 
 All answers are checked against Johnson + Dijkstra, which is itself validated against Bellman–Ford.
 
