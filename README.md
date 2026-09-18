@@ -95,6 +95,19 @@ This is research in progress. If you know of prior work, spot an error in the pr
 
 The code was developed with the help of an AI coding assistant. All results are checked against independent reference implementations included in this repository.
 
+## Citing this work
+
+If you refer to or build on this work, please cite it. GitHub's **"Cite this repository"** button (from [`CITATION.cff`](CITATION.cff)) gives BibTeX and APA:
+
+```bibtex
+@software{gupta2026negativecch,
+  author = {Gupta, Aarav},
+  title  = {Potential-free Customizable Contraction Hierarchies for Negative Edge Weights},
+  year   = {2026},
+  url    = {https://github.com/AaravG/negative-weight-cch}
+}
+```
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**All rights reserved.** The code and documents are published for reading, review and discussion. Copying, modifying, redistributing or using them requires written permission. To ask for permission (research, teaching or commercial), please [open an issue](https://github.com/AaravG/negative-weight-cch/issues). See [LICENSE](LICENSE).

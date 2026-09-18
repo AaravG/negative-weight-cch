@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you refer to or build on this work, please cite it as below."
+title: "Potential-free Customizable Contraction Hierarchies for Negative Edge Weights"
+type: software
+authors:
+  - family-names: Gupta
+    given-names: Aarav
+repository-code: "https://github.com/AaravG/negative-weight-cch"
+url: "https://github.com/AaravG/negative-weight-cch"
+abstract: >-
+  Exact shortest paths on road networks with negative edge weights (e.g.
+  electric-vehicle energy with regenerative braking) using Customizable
+  Contraction Hierarchies without potentials or Bellman-Ford, including
+  exact negative-cycle detection, partial re-customization, and a
+  battery-constrained variant.
+keywords:
+  - shortest paths
+  - contraction hierarchies
+  - negative edge weights
+  - route planning
+  - electric vehicles
+date-released: "2026-09-18"
+version: "0.1.0"
