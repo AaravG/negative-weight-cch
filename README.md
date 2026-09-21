@@ -73,9 +73,9 @@ With a battery of capacity M, each road (or path) maps the state of charge `b` a
 
 Setting `f(b) = −∞` below `in` keeps every function monotone over the whole range. The charge functions are those of Eisner, Funke & Storandt (2011). They are closed under composition, and together with pointwise max they form an ordered semiring. The general elimination theory (Rote §3–4) therefore applies, since no loop can gain charge. See `cch_battery.py`.
 
-Validated so far on small graphs only: 15,540 checks against step-by-step simulation and a label-correcting reference search.
+Validated on small graphs (15,540 checks against step-by-step simulation and a label-correcting reference search) and on NY/BAY (below).
 
-The main open question is **size**: each shortcut stores the upper envelope of several such functions (a "profile"), and it is not known whether profiles stay small on large road networks. On the small graphs they had at most 5 pieces. The NY/BAY experiment (`battery_benchmark.py`) measures this.
+The main open question is **size**: each shortcut stores the upper envelope of several such functions (a "profile"), and it is not known whether profiles stay small on large road networks. On the small graphs they had at most 5 pieces. On the NY and Bay Area road graphs (three battery sizes each, 120/120 queries correct), profiles had **about 1.1 pieces on average, but a few reached 222–299 pieces**: no blow-up on average, but a heavy tail. Customization took 34–99 s and queries 1–6 ms. See [`results/results_battery.md`](results/results_battery.md).
 
 ## Repository layout
 
