@@ -48,7 +48,7 @@ CCH customization is precisely this sparse elimination, restricted to the chorda
 
 We have not found this application stated in the route-planning literature, but it may be known to experts. Pointers are welcome.
 
-**Scope.** We treat the *unconstrained* shortest-path problem with conservative weights. Energy-optimal EV routing with battery-capacity constraints (a state of charge bounded in `[0, M]`) is not a plain shortest-path problem; Baum et al. handle it with piecewise cost functions. Extending the present approach to that setting is future work.
+**Scope.** We treat the *unconstrained* shortest-path problem with conservative weights. Energy-optimal EV routing with battery-capacity constraints (a state of charge bounded in `[0, M]`) is not a plain shortest-path problem; Baum et al. handle it with piecewise cost functions. We include a preliminary battery-constrained variant (monotone charge functions under max and composition), validated on small graphs only. Whether its profiles stay small on large networks is open.
 
 ---
 
@@ -64,6 +64,12 @@ We have not found this application stated in the route-planning literature, but 
     ℓ⁺(w,v) ← min(ℓ⁺(w,v), ℓ⁺(w,u) + ℓ⁺(u,v))
 
 When triangle `(u; v, w)` is processed, the values `ℓ⁺(v,u)`, `ℓ⁺(u,w)`, … are final, because an arc `{u,x}` is changed only by triangles whose lowest vertex is below `u`.
+
+It is the **vertices** that are ordered and eliminated. The triangles are simply grouped by their lowest vertex, and eliminating `u` processes all triangles in which `u` is the lowest (i.e. the middle vertex of `v → u → w`).
+
+**Potentials are irrelevant to the elimination.** Suppose `ℓ` is reweighted with any potential `p`, i.e. `ℓ_p(x,y) = ℓ(x,y) + p(x) − p(y)`. Every customized value is a minimum over lengths of `v–w` walks, and each such length shifts by the same constant `p(v) − p(w)`. So customizing `ℓ_p` yields exactly `ℓ⁺(v,w) + p(v) − p(w)`. Computing a potential first therefore changes nothing but a constant offset per shortcut.
+
+**Negative cycles during elimination.** Elimination itself does not break if negative cycles are present; they simply become apparent. In the algebraic formulation, a pivot closure becomes `−∞`. In CCH terms, some shortcut acquires `ℓ⁺(v,w) + ℓ⁺(w,v) < 0` (Theorem 3). A system can therefore detect a cycle as soon as it appears and reject the offending update.
 
 ---
 
@@ -298,7 +304,8 @@ A potential-free CCH for the full USA graph was not built. The prototype's in-me
 ## 7 Related work
 
 - **Negative-weight SSSP.** Classical Bellman–Ford and Goldberg's scaling algorithm, and recent near-linear algorithms [Bernstein, Nanongkai & Wulff-Nilsen 2022; Bringmann, Cassis & Fischer 2023] with engineered implementations [2025]. Tree-depth-parameterized negative-cycle detection [Iwata, Ogasawara & Ohsaka 2017] is closest in spirit, since it also exploits elimination structure.
-- **Path algebras and elimination.** Carré (1971); Lipton, Rose & Tarjan (1979); Tarjan (1981); Rote (1990), who gives a self-contained survey covering negative weights, elimination with short-cut arcs, nested dissection and LU-type factorization. This is the theory our correctness results specialize.
+- **Path algebras and elimination.** Carré (1971); Lipton, Rose & Tarjan (1979); Tarjan (1981); Rote (1990), who gives a self-contained survey covering negative weights, elimination with short-cut arcs, nested dissection and LU-type factorization. This is the theory our correctness results specialize. Gondran & Minoux (*Graphs, Dioids and Semirings*) collect many applications of these algebraic methods.
+- **Functions as arc weights.** Time-dependent route planning (e.g. public transport, and time-dependent contraction hierarchies) attaches a function to each arc, such as the earliest arrival for a given departure time. This is the same "monotone functions under max/min and composition" structure that our battery variant uses. In that setting, the size of the stored functions is a known practical concern. For our battery profiles, whether the number of pieces stays small on large networks is **open**; we observed at most 5 pieces on small graphs only.
 - **EV routing.** Eisner, Funke & Storandt (AAAI 2011) use Johnson shifting plus CH. Baum, Dibbelt, Pajor & Wagner (Algorithmica 2020) use height-induced potentials, CH, and battery constraints. Recent A*-based work covers resource-constrained search with negative weights (ESA 2025) and profile search (AAAI 2026).
 - **Route planning.** ALT [Goldberg & Harrelson 2005]; CH [Geisberger et al. 2008]; CRP [Delling et al. 2011], which has been extended to EV energy; CCH [Dibbelt, Strasser & Wagner 2016]; CCH survey [Bläsius, Buchhold, Wagner, Zeitz & Zündorf 2025]; inertial flow [Schild & Sommer 2015]; FlowCutter [Hamann & Strasser].
 - **Bidirectional and parallel A*.** Ikeda et al. (1994); two-thread bidirectional A* implementations.
@@ -325,4 +332,5 @@ All code is in this repository (see the top-level README). Raw results are in `r
 - Tarjan. Fast algorithms for solving path problems. JACM 28(3), 1981.
 - Rote. Path problems in graphs. In: Computational Graph Theory, Computing Supplementum 7, Springer, 1990, pp. 155–189. https://page.mi.fu-berlin.de/rote/Papers/pdf/Path+problems+in+graphs.pdf
 - Lipton, Rose, Tarjan. Generalized nested dissection. SIAM J. Numer. Anal. 16(2), 1979.
+- Gondran, Minoux. Graphs, Dioids and Semirings: New Models and Algorithms. Springer, 2008.
 - 9th DIMACS Implementation Challenge – Shortest Paths.

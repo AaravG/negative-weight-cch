@@ -18,7 +18,7 @@ It is shared as an **open technical log for review**. If this application to CCH
 
 ## Key observation
 
-- **Customization.** CCH processes lower triangles in rank order:
+- **Customization.** CCH eliminates the vertices in rank order (a nested-dissection order). When vertex `u` is eliminated, every triangle in which `u` is the lowest vertex updates the shortcut between the other two:
 
       ℓ⁺(v,w) ← min(ℓ⁺(v,w), ℓ⁺(v,u) + ℓ⁺(u,w))
 
@@ -63,9 +63,19 @@ Full tables are in [`results/`](results/). Absolute times are Python times; comp
 
 ## Battery constraints (early work)
 
-With a battery of capacity M, each road maps state of charge `b ↦ min(out, b − cost)` for `b ≥ in`. The charge functions are those of Eisner, Funke & Storandt (2011). They are closed under composition, and together with pointwise max they form an ordered semiring. The general elimination theory (Rote §3–4) therefore applies, since no loop can gain charge. See `cch_battery.py`.
+With a battery of capacity M, each road (or path) maps the state of charge `b` at its start to the charge at its end:
 
-Validated so far on small graphs only: 15,540 checks against step-by-step simulation and a label-correcting reference search. Large-graph experiments are pending.
+    f(b) = min(out, b − cost)   if b ≥ in,        f(b) = −∞   otherwise (infeasible)
+
+- **in** is the minimum charge needed to start without the battery running empty along the way.
+- **out** is the highest charge possible at the end, since the battery cannot exceed its capacity.
+- **cost** is the net energy used (negative when energy is recovered).
+
+Setting `f(b) = −∞` below `in` keeps every function monotone over the whole range. The charge functions are those of Eisner, Funke & Storandt (2011). They are closed under composition, and together with pointwise max they form an ordered semiring. The general elimination theory (Rote §3–4) therefore applies, since no loop can gain charge. See `cch_battery.py`.
+
+Validated so far on small graphs only: 15,540 checks against step-by-step simulation and a label-correcting reference search.
+
+The main open question is **size**: each shortcut stores the upper envelope of several such functions (a "profile"), and it is not known whether profiles stay small on large road networks. On the small graphs they had at most 5 pieces. The NY/BAY experiment (`battery_benchmark.py`) measures this.
 
 ## Repository layout
 

@@ -43,7 +43,7 @@ A plain-language glossary. Items marked (impl.) are implemented in this reposito
 - **Up-down path.** A path whose ranks first increase, then decrease. After (C)CH preprocessing, a shortest path of this shape always exists.
 - **CCH** (impl.). CH split into a metric-independent phase (order + shortcuts), customization (shortcut weights), and queries.
 - **Chordal supergraph / lower triangle.** The graph after adding all shortcuts. A lower triangle `(u; v, w)` has `u` ranked below `v` and `w`, and gives the rule `ℓ(v,w) ≤ ℓ(v,u) + ℓ(u,w)`.
-- **Basic customization** (impl.). Apply that rule to all lower triangles, lowest `u` first.
+- **Basic customization** (impl.). Eliminate the vertices in rank order. For each vertex `u`, apply that rule to every triangle in which `u` is the lowest vertex. It is the vertices that are ordered; the triangles are grouped by their lowest vertex.
 - **Elimination tree** (impl.). `parent(v)` is the lowest-ranked upper neighbour of `v`. Everything reachable upward from `v` lies on its path to the root.
 - **Elimination-tree query** (impl.). Relax the upward arcs of the ancestors of `s` (and, reversed, of `t`) in rank order, then take the best common ancestor. Costs `O(depth²)`.
 - **Partial re-customization** (impl.). After some input weights change, recompute only the affected shortcuts from their lower triangles, lowest first.
@@ -66,9 +66,15 @@ A plain-language glossary. Items marked (impl.) are implemented in this reposito
 ## Battery-constrained routing
 
 - **State of charge (SoC).** The battery energy `b ∈ [0, M]`.
-- **Charge function** (impl.). An arc maps `b ↦ min(out, b − cost)` if `b ≥ in`, and is infeasible otherwise (Eisner, Funke & Storandt 2011).
+- **Charge function** (impl.). An arc maps `b ↦ min(out, b − cost)` if `b ≥ in`, and to `−∞` (infeasible) otherwise (Eisner, Funke & Storandt 2011).
+  - `in` is the minimum charge needed to start without running empty on the way.
+  - `out` is the highest possible charge at the end, capped by the battery capacity.
+  - `cost` is the net energy used.
+
+  Using `−∞` below `in` keeps the function monotone everywhere.
 - **Composition** (impl.). Driving arc A then arc B gives `B(A(b))`, which has the same 3-parameter form.
-- **Profile / Pareto set** (impl.). A shortcut stores the few non-dominated charge functions of its paths; its value is their pointwise maximum.
+- **Profile / Pareto set** (impl.). A shortcut stores the few non-dominated charge functions of its paths; its value is their pointwise maximum. Whether profiles can grow large on big networks is an open question.
+- **Functions as arc weights, elsewhere.** The same idea appears in time-dependent routing, e.g. public transport, where `f(t)` is the earliest arrival when departing at time `t` or later. Gondran & Minoux (*Graphs, Dioids and Semirings*) collect many such applications.
 - **(max, ∘) structure.** The battery analogue of (min, +): `max` chooses the better route, composition chains roads. The "no gain cycles" condition replaces "no negative cycles".
 
 ## Mentioned but not implemented
