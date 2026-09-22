@@ -41,8 +41,83 @@ def _read_raw(name):
     return n, xy, arcs
 
 
+# Regions cut out of the full USA graph (lon/lat bounding boxes), largest
+# connected component only. Requires data/USA-road-d.USA.{gr,co}.gz.
+REGIONS = {
+    "FLA_R": (-87.7, 24.4, -79.8, 31.1),    # Florida (~1M nodes)
+    "CAL_R": (-124.5, 32.5, -114.0, 42.0),  # California + western Nevada (~2M nodes)
+}
+
+
+def _read_region(bbox):
+    lon0, lat0_, lon1, lat1 = bbox
+    keep = {}
+    pts = []
+    with gzip.open(DATA / "USA-road-d.USA.co.gz", "rb") as f:
+        for line in f:
+            if line[:1] == b"v":
+                _, i, x, y = line.split()
+                lon, lat = int(x) * 1e-6, int(y) * 1e-6
+                if lon0 <= lon <= lon1 and lat0_ <= lat <= lat1:
+                    keep[int(i) - 1] = len(pts)
+                    pts.append((lon, lat))
+    arcs = []
+    with gzip.open(DATA / "USA-road-d.USA.gr.gz", "rb") as f:
+        for line in f:
+            if line[:1] == b"a":
+                _, u, v, w = line.split()
+                u, v = keep.get(int(u) - 1), keep.get(int(v) - 1)
+                if u is not None and v is not None:
+                    arcs.append((u, v, int(w)))
+    del keep
+    # largest connected component (undirected)
+    n0 = len(pts)
+    nbr = [[] for _ in range(n0)]
+    for u, v, _ in arcs:
+        nbr[u].append(v)
+        nbr[v].append(u)
+    comp = [-1] * n0
+    best, best_id = 0, -1
+    for s0 in range(n0):
+        if comp[s0] != -1:
+            continue
+        comp[s0] = s0
+        stack, size = [s0], 0
+        while stack:
+            x = stack.pop()
+            size += 1
+            for y in nbr[x]:
+                if comp[y] == -1:
+                    comp[y] = s0
+                    stack.append(y)
+        if size > best:
+            best, best_id = size, s0
+    del nbr
+    remap = [-1] * n0
+    lonlat = []
+    for i in range(n0):
+        if comp[i] == best_id:
+            remap[i] = len(lonlat)
+            lonlat.append(pts[i])
+    arcs = [(remap[u], remap[v], w) for u, v, w in arcs if remap[u] >= 0 and remap[v] >= 0]
+    return lonlat, arcs
+
+
+def _read(name):
+    if name in REGIONS:
+        lonlat, arcs = _read_region(REGIONS[name])
+        n = len(lonlat)
+        coords = dict(enumerate(lonlat))
+    else:
+        return _read_raw(name)
+    lat0 = math.radians(statistics.fmean(c[1] for c in coords.values()))
+    kx, ky = 111320 * math.cos(lat0), 110540
+    xy = [(coords[i][0] * kx, coords[i][1] * ky) for i in range(n)]
+    return n, xy, arcs
+
+
 def load(name, weighting="ev", seed=0, dz_scale=None):
-    n, xy, arcs = _read_raw(name)
+    n, xy, arcs = _read(name)
     rng = random.Random(seed)
     g = Graph(n)
     if weighting == "shifted":

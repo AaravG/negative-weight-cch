@@ -75,14 +75,26 @@ def evaluate(f, b):
 
 
 def dominates(f, g, M):
-    """f(b) >= g(b) for every b in [0, M]?"""
-    if f[0] > g[0] + EPS:
+    """f(b) >= g(b) for every b in [0, M]?
+
+    Both functions are piecewise linear, so the difference is extreme at the
+    breakpoints of either function or at the ends of g's feasible range."""
+    fi, fc, fo = f
+    gi, gc, go = g
+    if fi > gi + EPS:
         return False
-    lo = g[0]
-    pts = [lo, M, f[2] + f[1], g[2] + g[1]]
-    for b in pts:
-        if lo - EPS <= b <= M + EPS:
-            if evaluate(f, b) < evaluate(g, b) - EPS:
+    lo, hi = gi - EPS, M + EPS
+    for b in (gi, M, fo + fc, go + gc):
+        if lo <= b <= hi:
+            if b < fi - EPS:
+                return False
+            vf = b - fc
+            if fo < vf:
+                vf = fo
+            vg = b - gc
+            if go < vg:
+                vg = go
+            if vf < vg - EPS:
                 return False
     return True
 
@@ -97,6 +109,19 @@ def prune(fs, M):
         out = [g for g in out if not dominates(f, g, M)]
         out.append(f)
     return out
+
+
+def merge_into(profile, h, M):
+    """Add function h to a minimal Pareto set (list, modified or replaced).
+    Returns the new list. Same result as prune(profile + [h]) up to ties."""
+    for g in profile:
+        if dominates(g, h, M):
+            return profile
+    if not profile:
+        return [h]
+    kept = [g for g in profile if not dominates(h, g, M)]
+    kept.append(h)
+    return kept
 
 
 def eval_profile(p, b):
@@ -127,6 +152,66 @@ class BatteryCCH:
         self.c = cch
 
     def customize(self, g, M):
+        """Fast customization: incremental Pareto merge, single-function fast path."""
+        c = self.c
+        self.M = M
+        up, down = self._base(g, M)
+        ta, tb, tc = c.tri_a, c.tri_b, c.tri_c
+        for i in range(len(ta)):
+            a, b, cc = ta[i], tb[i], tc[i]
+            da, ub = down[a], up[b]
+            if da and ub:
+                # y -> x -> z (down[a] then up[b])
+                if len(da) == 1 and len(ub) == 1:
+                    h = compose(da[0], ub[0], M)
+                    if h is not None:
+                        up[cc] = merge_into(up[cc], h, M)
+                else:
+                    tgt = up[cc]
+                    for f in da:
+                        for g2 in ub:
+                            h = compose(f, g2, M)
+                            if h is not None:
+                                tgt = merge_into(tgt, h, M)
+                    up[cc] = tgt
+            db, ua = down[b], up[a]
+            if db and ua:
+                # z -> x -> y (down[b] then up[a])
+                if len(db) == 1 and len(ua) == 1:
+                    h = compose(db[0], ua[0], M)
+                    if h is not None:
+                        down[cc] = merge_into(down[cc], h, M)
+                else:
+                    tgt = down[cc]
+                    for f in db:
+                        for g2 in ua:
+                            h = compose(f, g2, M)
+                            if h is not None:
+                                tgt = merge_into(tgt, h, M)
+                    down[cc] = tgt
+        self.up, self.down = up, down
+        sizes = [len(p) for p in up] + [len(p) for p in down]
+        return max(sizes), sum(sizes) / len(sizes)
+
+    def _base(self, g, M):
+        c = self.c
+        up = [[] for _ in range(c.m)]
+        down = [[] for _ in range(c.m)]
+        k = 0
+        for u in range(g.n):
+            for _, w in g.adj[u]:
+                a = c.edge_arc[k]
+                k += 1
+                if a < 0:
+                    continue
+                f = arc_function(w, M)
+                if f is not None:
+                    side = up if c.edge_dir[k - 1] else down
+                    side[a] = merge_into(side[a], f, M)
+        return up, down
+
+    def customize_reference(self, g, M):
+        """Original (slower) customization, kept to validate customize()."""
         c = self.c
         self.M = M
         up = [[] for _ in range(c.m)]

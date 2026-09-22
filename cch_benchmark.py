@@ -18,6 +18,7 @@ from search import astar, bidirectional_astar
 
 HERE = Path(__file__).parent
 EPS = 1e-6
+OUT = None
 N_QUERIES = 100
 N_CHECK = 30           # queries also run with the (slow) reference methods
 LANDMARKS = 16
@@ -153,17 +154,19 @@ def bench(name, lines):
         lines += [f"Negative cycle injected: CCH detects it: **{found_cch}** "
                   f"(partial update + scan {t_neg:.2f} s); Bellman-Ford detects it: {found_bf} "
                   f"({t_negbf:.1f} s). After restoring: CCH reports a cycle: {c.has_negative_cycle()}.", ""]
-        (HERE / "results_cch.md").write_text("\n".join(lines), encoding="utf-8")
+        OUT.write_text("\n".join(lines), encoding="utf-8")
 
 
 def main():
+    global OUT
     names = sys.argv[1:] or ["NY", "BAY"]
+    OUT = HERE / "results" / ("results_cch.md" if names == ["NY", "BAY"] else f"results_cch_{'_'.join(names)}.md")
     lines = ["# CCH with negative weights and no potential", "",
              "All CCH answers are checked against Johnson + Dijkstra. "
              "Pure Python; times are single-threaded.", ""]
     for name in names:
         bench(name, lines)
-        (HERE / "results_cch.md").write_text("\n".join(lines), encoding="utf-8")
+        OUT.write_text("\n".join(lines), encoding="utf-8")
     log("done")
 
 

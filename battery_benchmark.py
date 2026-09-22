@@ -16,6 +16,7 @@ from cch_battery import NEG, BatteryCCH, battery_label_correcting
 from cch_memory import mem_gb
 
 HERE = Path(__file__).parent
+OUT = None
 PAIRS = 10
 
 
@@ -24,11 +25,14 @@ def log(msg):
 
 
 def main():
+    global OUT
+    names = sys.argv[1:] or ["NY", "BAY"]
+    OUT = HERE / "results" / ("results_battery.md" if names == ["NY", "BAY"] else f"results_battery_{'_'.join(names)}.md")
     lines = ["# Battery-constrained CCH without potentials", "",
              "Energy metric: DIMACS lengths + synthetic terrain (EV terrain weighting). "
              "D = median unconstrained energy of random routes. Every CCH answer is "
              "compared with a label-correcting max-SoC search.", ""]
-    for name in sys.argv[1:] or ["NY", "BAY"]:
+    for name in names:
         g = dimacs.load(name, "ev", seed=1)
         m0 = mem_gb()
         t0 = time.perf_counter()
@@ -79,9 +83,9 @@ def main():
             log(f"{name} M={factor}D: customize {t_cust:.1f}s, profiles max {biggest} mean {avg:.2f}, "
                 f"correct {ok}/{total}, infeasible {infeasible}")
             del bc
-            (HERE / "results_battery.md").write_text("\n".join(lines), encoding="utf-8")
+            OUT.write_text("\n".join(lines), encoding="utf-8")
         lines.append("")
-        (HERE / "results_battery.md").write_text("\n".join(lines), encoding="utf-8")
+        OUT.write_text("\n".join(lines), encoding="utf-8")
     log("done")
 
 
