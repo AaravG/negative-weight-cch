@@ -53,6 +53,26 @@ All answers are checked against Johnson + Dijkstra, which is itself validated ag
 
 The CCH time includes the negative-cycle check.
 
+**Full USA road graph (23.9M nodes, 58.3M arcs), compiled with Numba** ([`results/results_nb_USA.md`](results/results_nb_USA.md), `cch_nb.py`, `run_nb.py`)
+
+| | EV terrain | Random shift |
+|---|---:|---:|
+| Customization (3.15 billion triangles, not stored) | 7.2 s | 7.3 s |
+| Negative-cycle scan | 0.03 s | 0.03 s |
+| **CCH query, no potential** (median) | **1.0 ms** | **1.0 ms** |
+| Johnson + Dijkstra query (compiled, reference) | 1,522 ms | 1,467 ms |
+| Correct | 100/100 | 100/100 |
+
+One-time ordering: 24 min (inertial flow, compiled). 96.7M shortcut arcs, elimination-tree depth 3,771. Peak memory 6.7 GB. Professional orderings (FlowCutter, KaHIP) would give a shallower tree and faster queries.
+
+**Scaling (pure Python, same code, regions cut from the USA graph)**
+
+| Map | Nodes | CCH query | Johnson + Dijkstra | CCH customization | Correct |
+|---|---:|---:|---:|---:|---:|
+| New York | 264k | 0.8 ms | 117–128 ms | 1.6 s | 200/200 |
+| Florida | 1.1M | 1.15 ms | 931–994 ms | 5.2 s | 200/200 |
+| California + W. Nevada | 1.9M | 3.0–3.2 ms | 1.3–1.4 s | 11 s | 200/200 |
+
 **Other results**
 
 - **Updates:** a single changed road takes 0.0–0.6 ms; 1,000 changed roads take 0.25–0.65 s. The result matched full re-customization exactly in every test.
@@ -94,7 +114,7 @@ A closer look ([`results/results_battery_profiles.md`](results/results_battery_p
 
 ## Running
 
-Requires Python 3.10+ and the standard library only.
+Requires Python 3.10+. The pure-Python code uses the standard library only; the compiled full-USA pipeline (`cch_nb.py`, `run_nb.py`) additionally needs `numpy` and `numba`.
 
 ```bash
 python test_correctness.py        # A*/ALT/bidirectional vs Bellman–Ford
@@ -114,7 +134,7 @@ Road data is from the [9th DIMACS Implementation Challenge](http://www.diag.unir
 - Pure-Python prototype; no C++ implementation yet.
 - The inertial-flow ordering is simpler than FlowCutter/KaHIP.
 - Synthetic elevation.
-- No CCH experiments on the full USA graph yet.
+- Full-USA experiments use a Numba-compiled version; no C++ implementation yet.
 - The battery model has no charging stops.
 
 ## Status and feedback
