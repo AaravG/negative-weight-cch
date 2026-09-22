@@ -77,6 +77,8 @@ Validated on small graphs (15,540 checks against step-by-step simulation and a l
 
 The main open question is **size**: each shortcut stores the upper envelope of several such functions (a "profile"), and it is not known whether profiles stay small on large road networks. On the small graphs they had at most 5 pieces. On the NY and Bay Area road graphs (three battery sizes each, 120/120 queries correct), profiles had **about 1.1 pieces on average, but a few reached 222–299 pieces**: no blow-up on average, but a heavy tail. Customization took 34–99 s and queries 1–6 ms. See [`results/results_battery.md`](results/results_battery.md).
 
+A closer look ([`results/results_battery_profiles.md`](results/results_battery_profiles.md), `battery_profiles.py`): 94–97% of shortcut directions have exactly one piece and only 0.11–0.17% have more than 10. The large profiles are genuine trade-offs (their pieces differ by roughly 0.1–10%, far above rounding error), they concentrate at a few vertices of the hierarchy, and they are identical across battery capacities.
+
 ## Repository layout
 
 | Files | What |
