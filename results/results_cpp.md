@@ -34,6 +34,26 @@ equally fast. What our approach removes is the potential computation itself,
 which matters when the cost model has no height-induced potential (Storandt,
 personal communication) or when the metric changes often.
 
+## Full USA road graph (23,947,347 nodes, 58,333,344 arcs), C++
+
+Raw output: `cpp_USA.txt`. One-time ordering 1,204 s (20 min); symbolic contraction
+1.4 s; 96,734,624 shortcut arcs; 3,151,504,591 triangles (never stored);
+elimination-tree depth 3,762.
+
+| | EV terrain | Random shift |
+|---|---:|---:|
+| Customization, no potential (includes the negative-cycle check) | **5.8 s** | 5.5 s |
+| Negative-cycle scan | 0.03 s | 0.03 s |
+| **Our query (sweep, no potential)** | **0.62 ms** | **0.64 ms** |
+| Shifted metric + sweep query | 0.61 ms | 0.64 ms |
+| Height-potential CCH + Dijkstra query + stalling | 2.69 ms | – |
+| Johnson-shifted CCH + Dijkstra query + stalling | 2.58 ms | 2.65 ms |
+| Johnson + plain Dijkstra (reference) | 1,577 ms | 1,529 ms |
+| Correct | 20/20 | 20/20 |
+
+Johnson's potential, which the potential-free variant does not need, costs
+2.56 s (EV terrain) and 1.33 s (random shift) on this graph.
+
 ## Real versus synthetic elevation
 
 | Graph | Negative edges (synthetic) | Negative edges (real) | Our query, synthetic | real |

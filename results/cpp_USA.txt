@@ -1,0 +1,17 @@
+USA: n=23,947,347 m=58,333,344 metrics=['ev', 'shifted'] z=True -> cpp\data\USA
+graph: n=23947347 m=58333344 metrics=2 (0.5s)
+undirected: 57708624 slots (1.6s)
+order: 1204.1s
+contraction: arcs=96734624 triangles=3151504591 depth=3762 (symbolic 1.4s, mapping 1.0s)
+[ev] customize 5.78s | negative-cycle scan 0.03s (0 arcs) | query 0.622 ms (1000 reachable)
+[ev] Johnson potential 2.56s | Dijkstra+potential 1577 ms/query | correct 20/20
+[ev] height-induced potential: free to compute, min reduced weight 0
+[ev] height-potential CCH (Dijkstra query + stalling): customize 5.56s, query 2.691 ms, 1585 settled/query, agrees 20/20
+[ev] shifted CCH (elimination-tree query): query 0.614 ms
+[ev] shifted CCH (Dijkstra query): customize 5.63s + potential 2.56s, query 2.894 ms, 3009 settled/query, agrees 20/20
+[ev] shifted CCH (Dijkstra query + stalling): customize 5.63s + potential 2.56s, query 2.583 ms, 1585 settled/query, agrees 20/20
+[shifted] customize 5.48s | negative-cycle scan 0.03s (0 arcs) | query 0.640 ms (1000 reachable)
+[shifted] Johnson potential 1.33s | Dijkstra+potential 1529 ms/query | correct 20/20
+[shifted] shifted CCH (elimination-tree query): query 0.635 ms
+[shifted] shifted CCH (Dijkstra query): customize 5.72s + potential 1.33s, query 2.856 ms, 3004 settled/query, agrees 20/20
+[shifted] shifted CCH (Dijkstra query + stalling): customize 5.72s + potential 1.33s, query 2.649 ms, 1581 settled/query, agrees 20/20

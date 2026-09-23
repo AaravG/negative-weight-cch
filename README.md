@@ -65,6 +65,8 @@ The CCH time includes the negative-cycle check.
 
 One-time ordering: 24 min (inertial flow, compiled). 96.7M shortcut arcs, elimination-tree depth 3,771. Peak memory 6.7 GB. Professional orderings (FlowCutter, KaHIP) would give a shallower tree and faster queries.
 
+**Full USA, C++** ([`results/results_cpp.md`](results/results_cpp.md)): customization **5.8 s**, query **0.62 ms**, 20/20 correct; the classical Dijkstra-based CCH query on the same hierarchy needs 2.6–2.7 ms and a potential (Johnson: 1.3–2.6 s). One-time ordering 20 min.
+
 **Scaling (pure Python, same code, regions cut from the USA graph)**
 
 | Map | Nodes | CCH query | Johnson + Dijkstra | CCH customization | Correct |
