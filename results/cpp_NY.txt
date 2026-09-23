@@ -1,0 +1,23 @@
+graph: n=264346 m=733846 metrics=3 (0.0s)
+undirected: 730100 slots (0.0s)
+order: 2.9s
+contraction: arcs=1531640 triangles=10168563 depth=345 (symbolic 0.0s, mapping 0.0s)
+[ev] customize 0.04s | negative-cycle scan 0.00s (0 arcs) | query 0.012 ms (1000 reachable)
+[ev] Johnson potential 0.10s | Dijkstra+potential 17 ms/query | correct 20/20
+[ev] height-induced potential: free to compute, min reduced weight 0
+[ev] height-potential CCH (Dijkstra query + stalling): customize 0.06s, query 0.099 ms, 239 settled/query, agrees 20/20
+[ev] shifted CCH (elimination-tree query): query 0.022 ms
+[ev] shifted CCH (Dijkstra query): customize 0.06s + potential 0.10s, query 0.100 ms, 287 settled/query, agrees 20/20
+[ev] shifted CCH (Dijkstra query + stalling): customize 0.06s + potential 0.10s, query 0.100 ms, 233 settled/query, agrees 20/20
+[shifted] customize 0.06s | negative-cycle scan 0.00s (0 arcs) | query 0.018 ms (1000 reachable)
+[shifted] Johnson potential 0.02s | Dijkstra+potential 16 ms/query | correct 20/20
+[shifted] shifted CCH (elimination-tree query): query 0.022 ms
+[shifted] shifted CCH (Dijkstra query): customize 0.04s + potential 0.02s, query 0.073 ms, 297 settled/query, agrees 20/20
+[shifted] shifted CCH (Dijkstra query + stalling): customize 0.04s + potential 0.02s, query 0.088 ms, 240 settled/query, agrees 20/20
+[ev_real] customize 0.04s | negative-cycle scan 0.00s (0 arcs) | query 0.013 ms (1000 reachable)
+[ev_real] Johnson potential 0.02s | Dijkstra+potential 16 ms/query | correct 20/20
+[ev_real] height-induced potential: free to compute, min reduced weight 0
+[ev_real] height-potential CCH (Dijkstra query + stalling): customize 0.05s, query 0.076 ms, 237 settled/query, agrees 20/20
+[ev_real] shifted CCH (elimination-tree query): query 0.021 ms
+[ev_real] shifted CCH (Dijkstra query): customize 0.04s + potential 0.02s, query 0.071 ms, 297 settled/query, agrees 20/20
+[ev_real] shifted CCH (Dijkstra query + stalling): customize 0.04s + potential 0.02s, query 0.099 ms, 236 settled/query, agrees 20/20

@@ -695,10 +695,14 @@ int main(int argc, char** argv) {
                    metric.c_str(), t_pot, 1000 * t_ref / (double)ncheck, (long long)ok, (long long)ncheck);
 
             // height-induced potential (free; the classical EV approach) for the ev metric
-            if (shifted_cch && metric == "ev" && !g.z.empty()) {
+            vector<double> zm = g.z;
+            if (std::filesystem::exists(dir + "/z_" + metric + ".f64"))
+                zm = read_bin<double>(dir + "/z_" + metric + ".f64");
+            else if (metric != "ev") zm.clear();
+            if (shifted_cch && !zm.empty()) {
                 const double BETA_DOWN = 0.6;
                 vector<double> ph(g.n);
-                for (i64 v = 0; v < g.n; v++) ph[v] = BETA_DOWN * g.z[v];
+                for (i64 v = 0; v < g.n; v++) ph[v] = BETA_DOWN * zm[v];
                 double worst = 0;
                 for (i64 u = 0; u < g.n; u++)
                     for (i64 k = g.off[u]; k < g.off[u + 1]; k++)

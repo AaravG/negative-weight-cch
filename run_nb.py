@@ -48,7 +48,7 @@ def load(name):
     import dimacs
     ws = {}
     base = None
-    for w in ("ev", "shifted"):
+    for w in ("ev", "shifted", "ev_real"):
         g = dimacs.load(name, w, seed=1)
         if base is None:
             n = g.n

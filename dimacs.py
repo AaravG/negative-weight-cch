@@ -8,6 +8,10 @@ DIMACS weights are road lengths (all positive), so two weightings are offered:
   straight-line distance never exceeds an edge's length, which keeps the
   domain bound a true lower bound.
 * ``shifted``: cost = len + phi(u) - phi(v) with random phi (no geometry used).
+* ``ev_real``: like ``ev`` but with real elevation from the AWS terrain tiles
+  (see elevation.py), scaled by CLIMB_PER_METRE: climbing one metre costs as
+  much as driving that many metres, so descents steeper than about 3% become
+  negative. Sea-floor values (roads sampling water pixels) are clamped to 0.
 """
 import gzip
 import math
@@ -19,6 +23,7 @@ import graphs
 from graphs import BETA_DOWN, BETA_UP, Graph
 
 DATA = Path(__file__).parent / "data"
+CLIMB_PER_METRE = 50.0   # energy of 1 m of climb, in metres of driving
 
 
 def _read_raw(name):
@@ -116,7 +121,7 @@ def _read(name):
     return n, xy, arcs
 
 
-def load(name, weighting="ev", seed=0, dz_scale=None):
+def load(name, weighting="ev", seed=0, dz_scale=None, zoom=11):
     n, xy, arcs = _read(name)
     rng = random.Random(seed)
     g = Graph(n)
@@ -137,8 +142,14 @@ def load(name, weighting="ev", seed=0, dz_scale=None):
                max(c[1] for c in g.coords) - min(c[1] for c in g.coords))
     x0 = min(c[0] for c in g.coords)
     y0 = min(c[1] for c in g.coords)
-    terrain = graphs._make_terrain(rng, size, bumps=60, amp=1.0)
-    raw_z = [graphs._terrain(x - x0, y - y0, terrain) for x, y in g.coords]
+    if weighting == "ev_real":
+        import elevation
+        metres = elevation.sample(raw_lonlat(name), zoom, log=lambda *_: None)
+        raw_z = [max(0.0, e) for e in metres]          # clamp sea floor to 0
+        dz_scale = CLIMB_PER_METRE * scale             # metres -> length units
+    else:
+        terrain = graphs._make_terrain(rng, size, bumps=60, amp=1.0)
+        raw_z = [graphs._terrain(x - x0, y - y0, terrain) for x, y in g.coords]
     if dz_scale is None:
         # choose the scale so roughly 10% of edges end up negative
         slopes = sorted(BETA_DOWN * abs(raw_z[v] - raw_z[u]) / w
@@ -156,3 +167,16 @@ def load(name, weighting="ev", seed=0, dz_scale=None):
         dz = g.z[v] - g.z[u]
         g.add_edge(u, v, w + (BETA_UP if dz > 0 else BETA_DOWN) * dz)
     return g
+
+def raw_lonlat(name):
+    """(lon, lat) per node, in graph order - used by elevation.py."""
+    if name in REGIONS:
+        lonlat, _ = _read_region(REGIONS[name])
+        return lonlat
+    coords = {}
+    with gzip.open(DATA / f"USA-road-d.{name}.co.gz", "rt") as f:
+        for line in f:
+            if line.startswith("v"):
+                _, i, x, y = line.split()
+                coords[int(i) - 1] = (int(x) * 1e-6, int(y) * 1e-6)
+    return [coords[i] for i in range(len(coords))]

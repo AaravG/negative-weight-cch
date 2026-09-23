@@ -23,6 +23,15 @@ def main():
     x.astype(np.float64).tofile(out / "x.f64")
     y.astype(np.float64).tofile(out / "y.f64")
     z = None
+    if name != "USA":
+        import dimacs
+        for metric in ("ev", "ev_real"):
+            try:
+                gz = dimacs.load(name, metric, seed=1).z
+            except Exception:
+                continue
+            if gz is not None:
+                np.asarray(gz, np.float64).tofile(out / f"z_{metric}.f64")
     if name == "USA":
         import os
         from pathlib import Path as _P
