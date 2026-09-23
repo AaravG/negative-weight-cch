@@ -295,7 +295,7 @@ A potential-free CCH for the full USA graph was not built. The prototype's in-me
 - **Scale.** The full-USA CCH still needs to be built, which requires a compact memory layout.
 - **Synthetic energy model.** Real elevation data (e.g. SRTM) and a calibrated EV consumption model are needed.
 - **Battery constraints.** State-of-charge bounds make path costs non-additive, as noted in the Scope paragraph of §1. Whether CCH customization can be lifted to the bounded cost functions of Baum et al. without a potential is open.
-- **Perfect customization and witness pruning.** Their correctness proofs appear sign-agnostic, but we have not verified them.
+- **Acceleration techniques.** Only basic customization and the elimination-tree query are studied here. Stall-on-demand is invalid with negative weights (§3). Perfect customization, witness pruning and search-space pruning rules have sign-agnostic-looking proofs, but we have not verified them; some of them may not carry over, which would cost part of the usual CCH speed-up.
 - **Parallel customization** carries over unchanged (level-synchronous processing does not depend on sign).
 - **Turn costs, one-to-many queries.** Not studied.
 
