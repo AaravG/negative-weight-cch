@@ -25,6 +25,10 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <atomic>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 using i32 = int32_t;
 using i64 = int64_t;
@@ -454,6 +458,72 @@ struct CCH {
         }
     }
 
+    // Level of a vertex: one more than the highest level among its lower
+    // neighbours. Vertices of the same level have no dependencies between them,
+    // and they only write arcs whose tail has a strictly higher level.
+    vector<i32> levels(vector<vector<i32>>& buckets) const {
+        vector<i32> lvl(n, 0);
+        i32 maxlvl = 0;
+        for (i64 x = 0; x < n; x++)
+            for (i64 a = first[x]; a < first[x + 1]; a++) {
+                const i64 y = head[a];
+                if (lvl[x] + 1 > lvl[y]) lvl[y] = lvl[x] + 1;
+                maxlvl = std::max(maxlvl, lvl[y]);
+            }
+        buckets.assign(maxlvl + 1, {});
+        for (i64 x = 0; x < n; x++) buckets[lvl[x]].push_back((i32)x);
+        return lvl;
+    }
+
+    static void atomic_min(double& slot, double v) {
+        auto* p = reinterpret_cast<std::atomic<uint64_t>*>(&slot);
+        uint64_t old = p->load(std::memory_order_relaxed);
+        double cur;
+        std::memcpy(&cur, &old, sizeof cur);
+        while (v < cur) {
+            uint64_t nv;
+            std::memcpy(&nv, &v, sizeof nv);
+            if (p->compare_exchange_weak(old, nv, std::memory_order_relaxed)) return;
+            std::memcpy(&cur, &old, sizeof cur);
+        }
+    }
+
+    // Same result as customize(), with the vertices of each level in parallel.
+    void customize_parallel(const vector<double>& w, vector<double>& up, vector<double>& dn,
+                            const vector<vector<i32>>& buckets) const {
+        up.assign(head.size(), INF);
+        dn.assign(head.size(), INF);
+        for (size_t k = 0; k < e_arc.size(); k++) {
+            const i64 a = e_arc[k];
+            if (a < 0) continue;
+            double& slot = e_up[k] ? up[a] : dn[a];
+            if (w[k] < slot) slot = w[k];
+        }
+        for (const auto& bucket : buckets) {
+            const int cnt = (int)bucket.size();
+            // Small levels (the top of the hierarchy) are cheaper to run serially
+            // than to synchronise; only wide levels are worth parallelising.
+            const bool par = cnt >= 512;
+#pragma omp parallel for schedule(dynamic, 64) if (par)
+            for (int bi = 0; bi < cnt; bi++) {
+                const i64 x = bucket[bi];
+                const i64 s = first[x], e = first[x + 1];
+                for (i64 i = s; i < e; i++) {
+                    const i64 y = head[i];
+                    i64 j = first[y];
+                    const i64 je = first[y + 1];
+                    const double d_yx = dn[i], u_xy = up[i];
+                    for (i64 kk = i + 1; kk < e; kk++) {
+                        const i64 z = head[kk];
+                        while (j < je && head[j] < z) j++;
+                        atomic_min(up[j], d_yx + up[kk]);
+                        atomic_min(dn[j], dn[kk] + u_xy);
+                    }
+                }
+            }
+        }
+    }
+
     i64 negative_cycle_arcs(const vector<double>& up, const vector<double>& dn) const {
         i64 c = 0;
         for (size_t a = 0; a < up.size(); a++)
@@ -611,6 +681,7 @@ int main(int argc, char** argv) {
     std::string dir = argv[1], order_file, only_metric;
     i64 nq = 1000, ncheck = 20;
     bool shifted_cch = false;
+    int threads = 0;
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--order" && i + 1 < argc) order_file = argv[++i];
@@ -618,6 +689,7 @@ int main(int argc, char** argv) {
         else if (a == "--check" && i + 1 < argc) ncheck = std::stoll(argv[++i]);
         else if (a == "--metric" && i + 1 < argc) only_metric = argv[++i];
         else if (a == "--shifted-cch") shifted_cch = true;
+        else if (a == "--parallel" && i + 1 < argc) threads = std::stoi(argv[++i]);
     }
 
     Graph g;
@@ -664,6 +736,24 @@ int main(int argc, char** argv) {
         t0 = now();
         c.customize(w, up, dn);
         const double t_cust = now() - t0;
+        if (threads > 0) {
+#ifdef _OPENMP
+            omp_set_num_threads(threads);
+#endif
+            vector<vector<i32>> buckets;
+            c.levels(buckets);
+            vector<double> pup, pdn;
+            t0 = now();
+            c.customize_parallel(w, pup, pdn, buckets);
+            const double t_par = now() - t0;
+            i64 diff = 0;
+            for (size_t a = 0; a < up.size(); a++)
+                if (!((up[a] == pup[a] || std::abs(up[a] - pup[a]) < 1e-9) &&
+                      (dn[a] == pdn[a] || std::abs(dn[a] - pdn[a]) < 1e-9))) diff++;
+            printf("[%s] parallel customization (%d threads, %zu levels): %.2fs (%.1fx), "
+                   "arcs differing from serial: %lld\n",
+                   metric.c_str(), threads, buckets.size(), t_par, t_cust / t_par, (long long)diff);
+        }
         t0 = now();
         const i64 neg = c.negative_cycle_arcs(up, dn);
         const double t_neg = now() - t0;

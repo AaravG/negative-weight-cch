@@ -129,7 +129,7 @@ The query gain comes from the sweep query, not from dropping the potential. What
 
 ## Which CCH acceleration techniques survive?
 
-[`results/results_pruning.md`](results/results_pruning.md): **perfect customization** stays exact; **witness pruning** stays exact if arcs are only removed through upper/intermediate triangles (still ~60% of arc directions); **stall-on-demand is unsafe**.
+[`results/results_pruning.md`](results/results_pruning.md): **perfect customization**, **witness pruning** (restricted to upper/intermediate triangles; ~60% of arc directions still removable), **path unpacking** (140/140 paths exact), **parallel customization** (bit-identical to serial, though not faster in our push-based variant) and **tie-based partial updates** (once they also propagate improvements) all stay exact. **Stall-on-demand is unsafe.**
 
 ## Real elevation
 

@@ -389,6 +389,111 @@ class CCH:
                         heapq.heappush(heap, (tail[c2], c2))
         return evaluated
 
+    # ------------------------------------------------ path unpacking
+
+    def query_path(self, s, t):
+        """Distance plus the shortest path as a list of original vertices.
+        Unpacks each shortcut through the lower triangle that realises its value."""
+        if not hasattr(self, "_df"):
+            self.query(s, t)
+        parent, first, head = self.parent, self.first, self.head
+        up, down = self.up, self.down
+        rs, rt = self.rank[s], self.rank[t]
+        n = self.n
+        df = [INF] * n
+        dr = [INF] * n
+        pf = [-1] * n          # arc used to reach this vertex going up from s
+        pr = [-1] * n
+        df[rs] = 0.0
+        dr[rt] = 0.0
+        x = rs
+        while x >= 0:
+            dx = df[x]
+            if dx < INF:
+                for a in range(first[x], first[x + 1]):
+                    y = head[a]
+                    if dx + up[a] < df[y]:
+                        df[y] = dx + up[a]
+                        pf[y] = a
+            x = parent[x]
+        x = rt
+        while x >= 0:
+            dx = dr[x]
+            if dx < INF:
+                for a in range(first[x], first[x + 1]):
+                    y = head[a]
+                    if dx + down[a] < dr[y]:
+                        dr[y] = dx + down[a]
+                        pr[y] = a
+            x = parent[x]
+        best, peak = INF, -1
+        x = rt
+        anc = set()
+        while x >= 0:
+            anc.add(x)
+            x = parent[x]
+        x = rs
+        while x >= 0:
+            if x in anc and df[x] + dr[x] < best:
+                best, peak = df[x] + dr[x], x
+            x = parent[x]
+        if peak < 0:
+            return INF, []
+        # shortcut arcs of the up-down path, as (from_rank, to_rank) pairs
+        legs = []
+        x = peak
+        while x != rs:
+            a = pf[x]
+            v = self._arc_tail(a)
+            legs.append((v, x))
+            x = v
+        legs.reverse()
+        x = peak
+        while x != rt:
+            a = pr[x]
+            v = self._arc_tail(a)
+            legs.append((x, v))
+            x = v
+        path = [legs[0][0]] if legs else [rs]
+        for v, w in legs:
+            self._unpack(v, w, path)
+        inv = [0] * n
+        for u in range(n):
+            inv[self.rank[u]] = u
+        return best, [inv[r] for r in path]
+
+    def _arc_tail(self, a):
+        if not hasattr(self, "tail"):
+            self.build_update_index()
+        return self.tail[a]
+
+    def _unpack(self, v, w, out):
+        """Append the vertices of the shortest v->w path (excluding v) to out."""
+        stack = [(v, w)]
+        while stack:
+            v, w = stack.pop()
+            lo, hi = (v, w) if v < w else (w, v)
+            a = self._find_arc(lo, hi)
+            cost = self.up[a] if v < w else self.down[a]
+            mid = -1
+            for u in self._lower_triangle_vertices(a):
+                c1 = self.down[self._find_arc(u, v)] if u < v else self.up[self._find_arc(v, u)]
+                c2 = self.up[self._find_arc(u, w)] if u < w else self.down[self._find_arc(w, u)]
+                if abs(c1 + c2 - cost) <= 1e-9 * max(1.0, abs(cost)):
+                    mid = u
+                    break
+            if mid < 0:
+                out.append(w)
+            else:
+                stack.append((mid, w))
+                stack.append((v, mid))
+
+    def _lower_triangle_vertices(self, a):
+        if not hasattr(self, "by_c"):
+            self.build_update_index()
+        coff, cids = self.by_c
+        return [self.tail[self.tri_a[cids[j]]] for j in range(coff[a], coff[a + 1])]
+
     # ------------------------------------------------ acceleration variants
 
     def perfect_customize(self):
@@ -463,6 +568,74 @@ class CCH:
                 if drop_dn[a]:
                     down[a] = saved_dn[j]
                     j += 1
+
+    def update_edges_tiebased(self, changes):
+        """Partial update in the style of Dibbelt et al. (2016), section 7.7:
+        propagate a change only to arcs whose value was *realised* by the old
+        value (an equality test), instead of re-evaluating every arc above.
+        Correctness with negative weights is what this method is used to test."""
+        if not hasattr(self, "by_c"):
+            self.build_update_index()
+        up, down, bu, bd = self.up, self.down, self.base_up, self.base_down
+        ew, ea, ed = self.edge_w, self.edge_arc, self.edge_dir
+        aoff, aids = self.arc_edges
+        ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
+        coff, cids = self.by_c
+        soff, sids = self.as_side
+        tail = self.tail
+        eps = 1e-9
+
+        touched = set()
+        for k, w in changes:
+            ew[k] = w
+            if ea[k] >= 0:
+                touched.add(ea[k])
+        for a in touched:
+            nu = nd = INF
+            for j in range(aoff[a], aoff[a + 1]):
+                kk = aids[j]
+                if ed[kk]:
+                    nu = min(nu, ew[kk])
+                else:
+                    nd = min(nd, ew[kk])
+            bu[a], bd[a] = nu, nd
+        heap = [(tail[a], a) for a in touched]
+        heapq.heapify(heap)
+        queued = set(touched)
+        evaluated = 0
+        while heap:
+            _, c = heapq.heappop(heap)
+            evaluated += 1
+            old_up, old_dn = up[c], down[c]
+            # recompute this arc from its own lower triangles and input edges
+            nu, nd = bu[c], bd[c]
+            for j in range(coff[c], coff[c + 1]):
+                t = cids[j]
+                a, b = ta[t], tb[t]
+                nu = min(nu, down[a] + up[b])
+                nd = min(nd, down[b] + up[a])
+            up[c], down[c] = nu, nd
+            if abs(nu - old_up) < eps and abs(nd - old_dn) < eps:
+                continue
+            # propagate only where the OLD value was realised (the tie test)
+            for j in range(soff[c], soff[c + 1]):
+                t = sids[j]
+                a, b, e = ta[t], tb[t], tc[t]
+                partner = b if a == c else a
+                if a == c:
+                    old_cu, new_cu = old_dn + up[partner], down[c] + up[partner]
+                    old_cd, new_cd = down[partner] + old_up, down[partner] + up[c]
+                else:
+                    old_cu, new_cu = down[partner] + old_up, down[partner] + up[c]
+                    old_cd, new_cd = old_dn + up[partner], down[c] + up[partner]
+                # the old value was this arc's witness (it may have to rise), or
+                # the new value improves it (it may have to fall)
+                realised_up = abs(up[e] - old_cu) < eps or new_cu < up[e] - eps
+                realised_dn = abs(down[e] - old_cd) < eps or new_cd < down[e] - eps
+                if (realised_up or realised_dn) and e not in queued:
+                    queued.add(e)
+                    heapq.heappush(heap, (tail[e], e))
+        return evaluated
 
     def has_negative_cycle(self):
         up, down = self.up, self.down
