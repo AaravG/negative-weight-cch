@@ -15,7 +15,8 @@ from run_nb import load
 
 def main():
     name = sys.argv[1]
-    out = Path(sys.argv[2] if len(sys.argv) > 2 else f"cpp/data/{name}")
+    root = Path(__file__).resolve().parent.parent
+    out = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "cpp" / "data" / name
     out.mkdir(parents=True, exist_ok=True)
     n, off, tgt, x, y, ws = load(name)
     off.astype(np.int64).tofile(out / "off.i64")

@@ -19,7 +19,8 @@ from pathlib import Path
 
 from graphs import BETA_DOWN, BETA_UP
 
-DATA = Path(__file__).parent / "data"
+ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "data"
 NAME = os.environ.get("ROAD_GRAPH", "USA")
 CACHE = DATA / "cache" / NAME
 

@@ -20,7 +20,7 @@ import numpy as np
 import cch_nb as nb
 from cch_memory import mem_gb
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent
 QUERIES = 100
 
 

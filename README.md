@@ -2,17 +2,17 @@
 
 Shortest paths on road networks with **negative edge weights**, motivated by energy-optimal routing for electric vehicles, where regenerative braking makes downhill segments cost negative energy.
 
-The core question: can **Customizable Contraction Hierarchies (CCH)** handle negative weights *without* first computing a potential (Johnson / Bellman–Ford reweighting)?
+The core question: can **Customizable Contraction Hierarchies (CCH)** handle negative weights *without* first computing a potential (Johnson / Bellman–Ford reweighting, or a height-induced one)?
 
-The answer is yes, and it follows from **classical theory**. Algebraic path-problem theory shows that eliminating vertices while adding short-cut arcs, in any order including nested-dissection orders, is exact for shortest paths with negative arc weights as long as there is no negative cycle. See [Rote, *Path Problems in Graphs*, 1990](https://page.mi.fu-berlin.de/rote/Papers/pdf/Path+problems+in+graphs.pdf), §2.1, §4.2–4.5; and Carré 1971; Lipton, Rose & Tarjan 1979; Tarjan 1981.
+The answer is yes, and it follows from **classical theory**: eliminating vertices while adding short-cut arcs, in any order including nested-dissection orders, is exact for shortest paths with negative arc weights as long as there is no negative cycle. See [Rote, *Path Problems in Graphs*, 1990](https://page.mi.fu-berlin.de/rote/Papers/pdf/Path+problems+in+graphs.pdf), §2.1 and §4.2–4.5; Carré 1971; Lipton, Rose & Tarjan 1979; Tarjan 1981.
 
 This repository does **not** claim a new algorithm. It contributes:
 
 - the explicit connection: modern CCH, whose literature assumes non-negative weights, inherits this property;
-- the practical consequences (queries, updates, cycle checks);
-- an implementation with tests and experiments on road networks.
+- the practical consequences: queries, updates, negative-cycle detection, a battery-constrained variant, and which CCH acceleration techniques still apply;
+- implementations in Python, Numba and C++, with tests and experiments up to the full USA road network.
 
-It is shared as an **open technical log for review**. If this application to CCH is already documented or considered folklore, please open an issue and point me to it.
+Shared as an **open technical log for review**. If this application to CCH is already documented, please open an issue and point me to it.
 
 ![CCH pipeline for negative edge weights](docs/images/pipeline.png)
 
@@ -22,165 +22,136 @@ It is shared as an **open technical log for review**. If this application to CCH
 
       ℓ⁺(v,w) ← min(ℓ⁺(v,w), ℓ⁺(v,u) + ℓ⁺(u,w))
 
-  This is vertex elimination in the (min, +) semiring. After the lower vertices are eliminated, a shortcut stores the best path through lower-ranked vertices (Rote §4.3), which is exact whenever there are no negative cycles (Rote §4, Theorems 1–4).
-- **Query.** The elimination-tree query relaxes a small ancestor DAG in rank order. It needs no priority queue and no Dijkstra stopping rule, which are exactly the parts that fail with negative weights.
-- **Negative cycles.** A negative cycle exists **iff** some shortcut has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0`. This is a CCH form of the classical pivot sign test (Rote §4.4). After an update, only the changed shortcuts need checking.
-- **Updates.** Partial re-customization recomputes affected shortcuts from their lower triangles, in rank order.
+  This is vertex elimination in the (min, +) semiring: a shortcut ends up holding the best path through lower-ranked vertices (Rote §4.3), which is exact whenever there are no negative cycles (Rote §4, Theorems 1–4).
+- **Query.** The elimination-tree ("sweep") query relaxes a small ancestor DAG in rank order. It needs no priority queue and no Dijkstra stopping rule — exactly the parts that fail with negative weights.
+- **Negative cycles.** A negative cycle exists **iff** some shortcut has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0`, a CCH form of the classical pivot sign test (Rote §4.4). It can be checked after customization, during it, or, after an update, on the changed shortcuts only.
+- **Updates.** Partial re-customization recomputes the affected shortcuts, lowest first.
+- **Potentials change nothing.** Reweighting with any potential shifts every customized value by a constant, so computing one first is never necessary (proof in the technical note).
 
-Proofs, complexity and limitations are in [`docs/technical_note.md`](docs/technical_note.md). Every algorithm used here is explained in [`docs/algorithms.md`](docs/algorithms.md).
+Proofs, complexity and limitations: [`docs/technical_note.md`](docs/technical_note.md). Every algorithm used here is explained in plain language in [`docs/algorithms.md`](docs/algorithms.md).
 
-## Results (pure Python, single-threaded)
+## Layout
 
-![Summary of test results](docs/images/results.png)
+| Directory | Contents |
+|---|---|
+| [`python/`](python) | reference implementation (standard library), Numba versions for large graphs, baselines, experiments, tests — see [`python/README.md`](python/README.md) |
+| [`cpp/`](cpp) | single-file C++20 implementation and the classical baselines — see [`cpp/README.md`](cpp/README.md) |
+| [`docs/`](docs) | technical note, algorithm glossary, full statistics (PDF), figures |
+| [`results/`](results) | every result table produced by the experiments |
+| [`scripts/`](scripts) | road-data download |
 
-All statistics (every table from every run) are in [`docs/test_statistics.pdf`](docs/test_statistics.pdf).
+## Results
 
-All answers are checked against Johnson + Dijkstra, which is itself validated against Bellman–Ford.
+All answers are verified against independent references: Bellman–Ford on the small graphs, and Johnson + Dijkstra (itself validated against Bellman–Ford) on the large ones.
 
-**Queries, DIMACS road graphs with 10–20% negative edges**
+**C++, real elevation** ([`results/results_cpp.md`](results/results_cpp.md))
 
-| Graph | Johnson + Dijkstra | Johnson + ALT A* | **CCH, no potential** |
+| Graph | Customization (no potential) | Our query | Classical CCH query (Dijkstra + stalling) | Johnson + Dijkstra |
+|---|---:|---:|---:|---:|
+| New York (264k nodes) | 0.04 s | **0.013 ms** | 0.076 ms | 16 ms |
+| SF Bay Area (321k) | 0.03 s | **0.007 ms** | 0.049 ms | 13 ms |
+| **Full USA (23.9M nodes, 58.3M arcs)** | **5.8 s** | **0.62 ms** | 2.69 ms | 1,577 ms |
+
+The classical variants also need a potential first: Johnson's costs 1.3–2.6 s on the USA; a height-induced one is free but only exists for simple cost models. The query gain itself comes from the sweep query rather than from dropping the potential — what the potential-free variant removes is the potential computation. One-time, weight-independent ordering: 2.8 s (NY), 20 min (USA).
+
+**Three implementations of the same algorithms** (New York)
+
+| | Ordering | Customization | Query |
 |---|---:|---:|---:|
-| New York (264k nodes) | 117–128 ms | 21–23 ms | **0.77 ms** |
-| SF Bay Area (321k nodes) | 183–187 ms | 43–45 ms | **0.30 ms** |
+| Pure Python ([`python/cch.py`](python/cch.py)) | 202 s | 1.6 s | 0.77 ms |
+| Numba ([`python/cch_nb.py`](python/cch_nb.py)) | 12 s | 0.1 s | 0.04 ms |
+| **C++ ([`cpp/cch.cpp`](cpp/cch.cpp))** | **2.8 s** | **0.04 s** | **0.012 ms** |
 
-**Preparing a new metric**
+**Scaling** (pure Python, regions cut from the USA graph)
 
-| Graph | Johnson's step + 16 ALT landmarks | **CCH customization** |
-|---|---:|---:|
-| New York | 9.1–12.5 s | **1.6 s** |
-| SF Bay Area | 10.5–14.2 s | **0.9–1.0 s** |
-
-The CCH time includes the negative-cycle check.
-
-**Full USA road graph (23.9M nodes, 58.3M arcs), compiled with Numba** ([`results/results_nb_USA.md`](results/results_nb_USA.md), `cch_nb.py`, `run_nb.py`)
-
-| | EV terrain | Random shift |
-|---|---:|---:|
-| Customization (3.15 billion triangles, not stored) | 7.2 s | 7.3 s |
-| Negative-cycle scan | 0.03 s | 0.03 s |
-| **CCH query, no potential** (median) | **1.0 ms** | **1.0 ms** |
-| Johnson + Dijkstra query (compiled, reference) | 1,522 ms | 1,467 ms |
-| Correct | 100/100 | 100/100 |
-
-One-time ordering: 24 min (inertial flow, compiled). 96.7M shortcut arcs, elimination-tree depth 3,771. Peak memory 6.7 GB. Professional orderings (FlowCutter, KaHIP) would give a shallower tree and faster queries.
-
-**Full USA, C++** ([`results/results_cpp.md`](results/results_cpp.md)): customization **5.8 s**, query **0.62 ms**, 20/20 correct; the classical Dijkstra-based CCH query on the same hierarchy needs 2.6–2.7 ms and a potential (Johnson: 1.3–2.6 s). One-time ordering 20 min.
-
-**Scaling (pure Python, same code, regions cut from the USA graph)**
-
-| Map | Nodes | CCH query | Johnson + Dijkstra | CCH customization | Correct |
+| Map | Nodes | CCH query | Johnson + Dijkstra | Customization | Correct |
 |---|---:|---:|---:|---:|---:|
 | New York | 264k | 0.8 ms | 117–128 ms | 1.6 s | 200/200 |
 | Florida | 1.1M | 1.15 ms | 931–994 ms | 5.2 s | 200/200 |
 | California + W. Nevada | 1.9M | 3.0–3.2 ms | 1.3–1.4 s | 11 s | 200/200 |
 
-**Other results**
+On the full USA in Numba: customization 7.2 s over 3.15 billion triangles (none stored), negative-cycle scan 0.03 s, query 1.0 ms, 100/100 correct, peak memory 6.7 GB ([`results/results_nb_USA.md`](results/results_nb_USA.md)).
 
-- **Updates:** a single changed road takes 0.0–0.6 ms; 1,000 changed roads take 0.25–0.65 s. The result matched full re-customization exactly in every test.
-- **Full USA graph** (24M nodes, potential-based methods only): Johnson + Dijkstra 9–12 s per query, bidirectional ALT on 2 cores 0.8–1.2 s. Bellman–Ford took more than 35 minutes per query.
-- **Textbook A\*** with a straight-line heuristic returns **wrong answers** on about 50% of queries when edges can be negative.
+**Updates and negative cycles.** One changed road: 0.0–0.6 ms; 1,000 changed roads: 0.25–0.65 s; every partial update matched a full recomputation exactly. An injected negative cycle is found in 0.03–0.22 s, and after an update only the changed shortcuts need checking.
 
-Full tables are in [`results/`](results/). Absolute times are Python times; compiled implementations would be much faster, and the ratios between methods are only indicative.
+**Textbook A\*** with a straight-line heuristic returns **wrong answers on about half of all queries** once edges can be negative — one reason this problem needs care.
 
-## Battery constraints (early work)
-
-With a battery of capacity M, each road (or path) maps the state of charge `b` at its start to the charge at its end:
-
-    f(b) = min(out, b − cost)   if b ≥ in,        f(b) = −∞   otherwise (infeasible)
-
-- **in** is the minimum charge needed to start without the battery running empty along the way.
-- **out** is the highest charge possible at the end, since the battery cannot exceed its capacity.
-- **cost** is the net energy used (negative when energy is recovered).
-
-Setting `f(b) = −∞` below `in` keeps every function monotone over the whole range. The charge functions are those of Eisner, Funke & Storandt (2011). They are closed under composition, and together with pointwise max they form an ordered semiring. The general elimination theory (Rote §3–4) therefore applies, since no loop can gain charge. See `cch_battery.py`.
-
-Validated on small graphs (15,540 checks against step-by-step simulation and a label-correcting reference search) and on NY/BAY (below).
-
-The main open question is **size**: each shortcut stores the upper envelope of several such functions (a "profile"), and it is not known whether profiles stay small on large road networks. On the small graphs they had at most 5 pieces. On the NY and Bay Area road graphs (three battery sizes each, 120/120 queries correct), profiles had **about 1.1 pieces on average, but a few reached 222–299 pieces**: no blow-up on average, but a heavy tail. Customization took 34–99 s and queries 1–6 ms. See [`results/results_battery.md`](results/results_battery.md).
-
-**Full USA (23.9M nodes), compiled** ([`results/results_nb_battery_USA.md`](results/results_nb_battery_USA.md), `cch_nb_battery.py`): battery customization takes 8–15 min and 10 GB, queries 2–44 ms, and **40/40 answers are correct** at M = 0.25 D and M = D (at M = 4 D the reference search needs hours per query, so that size reports performance only). **96–98% of the 193M shortcut directions hold a single piece, only 12 exceed 100 pieces, and the largest is 180** — smaller than on New York, so there is no blow-up at continental scale.
-
-A closer look ([`results/results_battery_profiles.md`](results/results_battery_profiles.md), `battery_profiles.py`): 94–97% of shortcut directions have exactly one piece and only 0.11–0.17% have more than 10. The large profiles are genuine trade-offs (their pieces differ by roughly 0.1–10%, far above rounding error), they concentrate at a few vertices of the hierarchy, and they are identical across battery capacities.
-
-## Three implementations
-
-| | Ordering (NY) | Customization (NY) | Query (NY) |
-|---|---:|---:|---:|
-| Pure Python (`cch.py`) | 202 s | 1.6 s | 0.77 ms |
-| Numba (`cch_nb.py`) | 12 s | 0.1 s | 0.04 ms |
-| **C++ (`cpp/cch.cpp`)** | **2.8 s** | **0.04 s** | **0.012 ms** |
-
-All three agree with the reference answers. Build the C++ version with `cpp/build.bat` (MSVC) after exporting a graph with `export_graph.py`.
-
-## Comparison with the classical (potential-based) pipeline
-
-Measured on the same hierarchy in C++ ([`results/results_cpp.md`](results/results_cpp.md)):
-
-| Approach | Potential needed | Query, NY (real elevation) | BAY |
-|---|---|---:|---:|
-| **Ours: no potential, sweep query** | **none** | **0.013 ms** | **0.007 ms** |
-| Shifted metric + sweep query | Johnson or height | 0.021 ms | 0.010 ms |
-| Height-potential CCH + Dijkstra query + stalling (Eisner/Baum style) | height (free) | 0.076 ms | 0.049 ms |
-| Johnson-shifted CCH + Dijkstra query | Johnson | 0.071 ms | 0.046 ms |
-| Johnson + plain Dijkstra | Johnson | 16 ms | 13 ms |
-
-The query gain comes from the sweep query, not from dropping the potential. What the potential-free variant removes is the potential computation, which matters when the cost model admits no height-induced potential.
-
-## Which CCH acceleration techniques survive?
-
-[`results/results_pruning.md`](results/results_pruning.md): **perfect customization**, **witness pruning** (restricted to upper/intermediate triangles; ~60% of arc directions still removable), **path unpacking** (140/140 paths exact), **parallel customization** (bit-identical to serial, though not faster in our push-based variant) and **tie-based partial updates** (once they also propagate improvements) all stay exact. **Stall-on-demand is unsafe.**
+Full tables are in [`results/`](results); every table from every run is collected in [`docs/test_statistics.pdf`](docs/test_statistics.pdf). Python timings are Python timings; the ratios between methods are the meaningful part.
 
 ## Real elevation
 
-`elevation.py` fetches the public AWS Terrain Tiles (SRTM/USGS) and decodes the PNGs with the standard library only; `dimacs.py` then offers the `ev_real` metric (climbing 1 m costs 50 m of driving, sea floor clamped to 0). Real terrain gives 10.0% negative edges on New York and 10.3% on the Bay Area, with essentially unchanged timings.
+[`python/elevation.py`](python/elevation.py) fetches the public [AWS Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (SRTM/USGS) and decodes the PNGs with the standard library only; `dimacs.py` then offers the `ev_real` metric. Climbing one metre is charged as 50 metres of driving, so descents steeper than about 3% come out negative. Real terrain gives 10.0% negative edges on New York and 10.3% on the Bay Area, with essentially unchanged timings. The older synthetic weighting (`ev`) is still available for comparison.
 
-## Repository layout
+## Which CCH acceleration techniques survive?
 
-| Files | What |
+[`results/results_pruning.md`](results/results_pruning.md):
+
+| Technique | Verdict |
 |---|---|
-| `cch.py`, `inertial_flow.py` | CCH with negative weights: ordering (inertial flow + Dinic max-flow), contraction, customization, partial updates, negative-cycle test, elimination-tree query |
-| `cch_battery.py` | Battery-constrained customization (profiles of charge functions) and scalar queries |
-| `graphs.py`, `dimacs.py` | Synthetic graphs with negative edges; DIMACS loader with EV-terrain and random-shift weightings |
-| `preprocess.py`, `heuristics.py`, `search.py`, `parallel.py` | Baselines: Bellman–Ford/SPFA, Johnson, ALT, domain bound, A*, bidirectional A*, 2-process bidirectional A* |
-| `bigcsr.py`, `bigsearch.py`, `usa_benchmark.py`, `usa_retime.py` | Memory-mapped pipeline for the full USA graph |
-| `test_*.py` | Correctness tests |
-| `*benchmark*.py`, `cch_memory.py` | Experiments |
-| `docs/`, `results/` | Technical note, algorithm glossary, result tables |
+| Basic customization, elimination-tree query | work (proved and tested) |
+| Perfect customization | works: 0 mismatches in 3,618 arc distances |
+| Witness pruning | works if arcs are removed only via upper/intermediate triangles (~60% of arc directions still removable) |
+| Path unpacking | works: 140/140 paths are real edge sequences of exactly the shortest length |
+| Partial updates (recompute variant) | works: identical to full customization in every run |
+| Tie-based partial updates (CCH paper §7.7) | works once they also propagate improvements, not only witness ties |
+| Parallel customization by levels | bit-identical to serial; 1.6–1.9× on NY, no gain at USA scale in our push-based variant |
+| **Stall-on-demand** | **unsafe** (850 observed cases where an exact label would have been stalled) |
+| **Dijkstra-ordered queries and stopping rules** | **unsafe** |
 
-## Running
+## Battery constraints
 
-Requires Python 3.10+. The pure-Python code uses the standard library only; the compiled full-USA pipeline (`cch_nb.py`, `run_nb.py`) additionally needs `numpy` and `numba`.
+With capacity M, each road maps the state of charge at its start to the charge at its end:
+
+    f(b) = min(out, b − cost)   if b ≥ in,        f(b) = −∞   otherwise (infeasible)
+
+`in` is the charge needed to start without running empty, `out` the highest possible charge at the end (the battery cannot overfill), `cost` the net energy. These are the cost functions of Eisner, Funke & Storandt (2011) written in terms of remaining charge; `−∞` below `in` keeps them monotone. They are closed under composition and, with pointwise maximum, form an ordered semiring, so the same elimination theory applies — no loop can gain charge. See [`python/cch_battery.py`](python/cch_battery.py).
+
+| | Small graphs | NY / BAY | Full USA |
+|---|---|---|---|
+| Correct | 15,540 checks | 120/120 | 40/40 at M = 0.25 D and M = D |
+| Customization | — | 34–99 s | 8–15 min, 10 GB |
+| Query | — | 1–6 ms | 2–44 ms |
+| Shortcut directions with a single piece | — | 94–97% | 96–98% |
+| Largest profile | ≤ 5 | 222–299 | 180 |
+
+Profiles therefore do **not** blow up at continental scale: only 12 of 193M shortcut directions hold more than 100 pieces. The large ones are genuine trade-offs (pieces differ by 0.1–10%, far above rounding error), they concentrate at a few vertices, and they are identical across battery capacities ([`results/results_battery_profiles.md`](results/results_battery_profiles.md)). At M = 4 D the reference search needs hours per query, so that size reports performance only.
+
+## Reproducing
 
 ```bash
-python test_correctness.py        # A*/ALT/bidirectional vs Bellman–Ford
-python test_cch.py                # CCH: queries, bounds, updates, negative cycles
-python test_cch_battery.py        # battery-constrained CCH
-python benchmark.py --quick       # small synthetic benchmark (seconds)
-
-python scripts/download_dimacs.py NY BAY    # ~14 MB into data/
-python cch_benchmark.py NY BAY              # CCH vs Johnson/ALT (~20 min)
-python battery_benchmark.py NY BAY          # battery-constrained CCH
+python scripts/download_dimacs.py NY BAY
 ```
 
-Road data is from the [9th DIMACS Implementation Challenge](http://www.diag.uniroma1.it/challenge9/). It is not redistributed here; the download script fetches it. The elevation used for the EV weighting is **synthetic**. Real elevation data is future work.
+```bash
+cd python && python test_cch.py && python test_cch_battery.py && python test_cch_extras.py
+```
+
+```bash
+cd python && python cch_benchmark.py NY BAY
+```
+
+```bash
+cd cpp && build.bat && python ../python/export_graph.py NY && cch.exe data/NY --queries 1000 --check 20 --shifted-cch
+```
+
+Road data: [9th DIMACS Implementation Challenge](http://www.diag.uniroma1.it/challenge9/) (not redistributed here). Python 3.10+; the Numba parts additionally need `numpy` and `numba`; the C++ part needs a C++20 compiler.
 
 ## Limitations
 
-- The inertial-flow ordering is simpler than FlowCutter/KaHIP.
-- Synthetic elevation.
-- Full-USA experiments use a Numba-compiled version; no C++ implementation yet.
-- The battery model has no charging stops.
+- The node ordering is a simple inertial-flow implementation; FlowCutter/KaHIP-style orders would give a shallower elimination tree (ours is 3,762 deep on the USA) and faster queries.
+- Turn costs, one-to-many queries and hub labelling are not covered.
+- The battery variant has no charging stops, and its M = 4 D results on the USA are unverified.
+- Untested with negative weights: SIMD multi-metric customization (watch the "infinity plus a negative number" pitfall described in the technical note) and hub labelling.
 
 ## Status and feedback
 
-This is research in progress. If you know of prior work, spot an error in the proofs, or work on CH/CCH or EV routing, please open an issue.
+Research in progress. If you know of prior work, spot an error in the proofs, or work on CH/CCH or EV routing, please open an issue.
 
-The code was developed with the help of an AI coding assistant. All results are checked against independent reference implementations included in this repository.
+The code was developed with the help of an AI coding assistant. Every result is checked against independent reference implementations included in this repository.
 
 ## Citing this work
 
-If you refer to or build on this work, please cite it. GitHub's **"Cite this repository"** button (from [`CITATION.cff`](CITATION.cff)) gives BibTeX and APA:
+GitHub's **"Cite this repository"** button uses [`CITATION.cff`](CITATION.cff):
 
 ```bibtex
 @software{gupta2026negativecch,
@@ -191,6 +162,10 @@ If you refer to or build on this work, please cite it. GitHub's **"Cite this rep
 }
 ```
 
+## Acknowledgements
+
+Günter Rote and Sabine Storandt kindly answered questions about the classical elimination theory and about CCH respectively; their comments shaped several parts of this work.
+
 ## License
 
-**All rights reserved.** The code and documents are published for reading, review and discussion. Copying, modifying, redistributing or using them requires written permission. To ask for permission (research, teaching or commercial), please [open an issue](https://github.com/AaravG/negative-weight-cch/issues). See [LICENSE](LICENSE).
+**All rights reserved.** Published for reading, review and discussion; copying, modifying or reusing requires written permission — please [open an issue](https://github.com/AaravG/negative-weight-cch/issues). See [LICENSE](LICENSE).

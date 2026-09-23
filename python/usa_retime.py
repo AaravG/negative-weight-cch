@@ -12,7 +12,7 @@ from pathlib import Path
 import bigcsr
 import bigsearch as bs
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent / "results"
 METHODS = {"ev": ["johnson", "domain", "alt", "max", "bidir-max", "naive"],
            "shifted": ["johnson", "alt", "bidir-alt"]}
 

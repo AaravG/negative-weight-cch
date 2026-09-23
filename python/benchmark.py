@@ -20,7 +20,7 @@ from preprocess import ALTTables, johnson_potential
 from search import astar, astar_reopening, bellman_ford_query, bidirectional_astar
 
 EPS = 1e-6
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent / "results"
 
 
 def timed(fn):

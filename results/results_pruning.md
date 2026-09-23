@@ -1,6 +1,6 @@
 # Which CCH acceleration techniques survive negative weights?
 
-`test_cch_pruning.py`, on 9 small graphs with negative edges (grid, geometric,
+`python/test_cch_pruning.py`, on 9 small graphs with negative edges (grid, geometric,
 random-shift), checked against Bellman-Ford.
 
 | Technique | Verdict | Evidence |
@@ -11,7 +11,7 @@ random-shift), checked against Bellman-Ford.
 | **Witness pruning / arc removal** | **works, with one restriction** | only arcs whose detour runs through a *higher*-ranked vertex (upper or intermediate triangle) may be removed. Then 0 of 225 queries were wrong, and about 60% of arc directions (32,383 of 54,310) were still removable. Dropping arcs whose detour uses a lower-ranked vertex breaks correctness (183 of 225 queries wrong in an earlier run). |
 | **Stall-on-demand** | **unsafe** | in 850 cases a vertex would have been stalled although its sweep label was already the exact distance; the stall test assumes a Dijkstra-style order that negative weights destroy |
 
-## Further techniques (`test_cch_extras.py`, and `cch --parallel` in C++)
+## Further techniques (`python/test_cch_extras.py`, and `cch --parallel` in C++)
 
 | Technique | Verdict | Evidence |
 |---|---|---|

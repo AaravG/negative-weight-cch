@@ -19,7 +19,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 BASE = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium"
-CACHE = Path(__file__).parent / "data" / "terrain"
+ROOT = Path(__file__).resolve().parent.parent
+CACHE = ROOT / "data" / "terrain"
 TILE = 256
 
 

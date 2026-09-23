@@ -19,7 +19,7 @@ import dimacs
 from cch import CCH
 from cch_battery import BatteryCCH
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent
 BUCKETS = [(0, 0), (1, 1), (2, 5), (6, 10), (11, 50), (51, 100), (101, 10**9)]
 
 

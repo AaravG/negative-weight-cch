@@ -16,7 +16,7 @@ from heuristics import ALTPotential, JohnsonPotential
 from preprocess import ALTTables, NegativeCycleError, johnson_potential
 from search import astar, bidirectional_astar
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent
 EPS = 1e-6
 OUT = None
 N_QUERIES = 100

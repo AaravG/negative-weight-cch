@@ -15,7 +15,7 @@ from cch import CCH
 from cch_battery import NEG, BatteryCCH, battery_label_correcting
 from cch_memory import mem_gb
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent
 OUT = None
 PAIRS = 10
 

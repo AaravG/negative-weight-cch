@@ -22,7 +22,8 @@ from pathlib import Path
 import graphs
 from graphs import BETA_DOWN, BETA_UP, Graph
 
-DATA = Path(__file__).parent / "data"
+ROOT = Path(__file__).resolve().parent.parent
+DATA = ROOT / "data"
 CLIMB_PER_METRE = 50.0   # energy of 1 m of climb, in metres of driving
 
 

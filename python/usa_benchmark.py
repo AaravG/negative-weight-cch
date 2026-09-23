@@ -29,7 +29,7 @@ from pathlib import Path
 import bigcsr
 import bigsearch as bs
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent / "results"
 EPS = 1e-6
 LABELS = {
     "bf": "Bellman-Ford (SPFA), no preprocessing",

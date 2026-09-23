@@ -2,7 +2,7 @@
 
 `cpp/cch.cpp`, built with MSVC (/O2). Same algorithms as the Python and Numba
 versions. Metrics: `ev` (synthetic terrain), `ev_real` (real elevation from the
-AWS terrain tiles, see `elevation.py`), `shifted` (random potential shift).
+AWS terrain tiles, see `python/elevation.py`), `shifted` (random potential shift).
 1,000 random queries per metric, 20 of them verified against Dijkstra with a
 Johnson potential. Raw output: `cpp_NY.txt`, `cpp_BAY.txt`.
 

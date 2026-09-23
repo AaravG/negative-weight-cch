@@ -19,7 +19,7 @@ import cch_nb_battery as nbb
 from cch_memory import mem_gb
 from run_nb import load, log
 
-HERE = Path(__file__).parent
+HERE = Path(__file__).resolve().parent.parent
 
 
 def main():

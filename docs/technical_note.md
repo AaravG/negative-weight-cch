@@ -142,7 +142,7 @@ Checking all arcs takes `O(|E⁺|)` time. This is dominated by customization its
 
 *Proof.* By Theorem 3, a negative cycle exists iff some arc has a negative 2-cycle sum. An arc outside `D` has the same values as before, when the sum was `≥ 0` by Theorem 3 applied to the conservative metric. ∎
 
-**Detection during elimination.** Because the arcs of vertex `x` are final when `x` is eliminated, the test can run inside customization: after finishing vertex `x`, check its arcs for `ℓ⁺(v,w) + ℓ⁺(w,v) < 0` and stop. `cch.py` implements this (`customize(..., stop_on_negative_cycle=True)`); on small graphs with an injected cycle it stops almost immediately instead of completing the customization.
+**Detection during elimination.** Because the arcs of vertex `x` are final when `x` is eliminated, the test can run inside customization: after finishing vertex `x`, check its arcs for `ℓ⁺(v,w) + ℓ⁺(w,v) < 0` and stop. `python/cch.py` implements this (`customize(..., stop_on_negative_cycle=True)`); on small graphs with an injected cycle it stops almost immediately instead of completing the customization.
 
 **Handling a detected cycle.** A negative cycle means shortest paths are undefined, and **no feasible potential exists**, so falling back to potential shifting is impossible. The only sensible reaction is to reject the update: apply the inverse partial update, which restores the previous customization exactly (Theorem 4), or clamp the offending input weights. Our experiments exercise this reject-and-restore path (§5.5).
 
