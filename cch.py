@@ -374,6 +374,81 @@ class CCH:
                         heapq.heappush(heap, (tail[c2], c2))
         return evaluated
 
+    # ------------------------------------------------ acceleration variants
+
+    def perfect_customize(self):
+        """Top-down pass over upper/intermediate triangles (CCH survey, step 3).
+        Afterwards every arc should hold the true distance between its endpoints.
+        Valid with negative weights? -> tested in test_cch_pruning.py."""
+        up, down = self.up, self.down
+        ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
+        tail = getattr(self, "tail", None)
+        if tail is None:
+            self.build_update_index()
+            tail = self.tail
+        order = sorted(range(len(ta)), key=lambda i: -tail[ta[i]])
+        for i in order:
+            a, b, c = ta[i], tb[i], tc[i]      # a=(x,y), b=(x,z), c=(y,z), x lowest
+            v = up[b] + down[c]                # x -> z -> y
+            if v < up[a]:
+                up[a] = v
+            v = up[c] + down[b]                # y -> z -> x
+            if v < down[a]:
+                down[a] = v
+            v = up[a] + up[c]                  # x -> y -> z
+            if v < up[b]:
+                up[b] = v
+            v = down[c] + down[a]              # z -> y -> x
+            if v < down[b]:
+                down[b] = v
+        return up, down
+
+    def prunable_arcs(self):
+        """Arcs a witness search may remove after perfect customization: the same
+        distance is realised through a higher-ranked vertex (upper or
+        intermediate triangle), so an up-down path still exists."""
+        up, down = self.up, self.down
+        ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
+        drop_up = bytearray(self.m)
+        drop_dn = bytearray(self.m)
+        eps = 1e-9
+        for i in range(len(ta)):
+            a, b, c = ta[i], tb[i], tc[i]
+            if abs(up[a] - (up[b] + down[c])) < eps:
+                drop_up[a] = 1
+            if abs(down[a] - (up[c] + down[b])) < eps:
+                drop_dn[a] = 1
+            if abs(up[b] - (up[a] + up[c])) < eps:
+                drop_up[b] = 1
+            if abs(down[b] - (down[c] + down[a])) < eps:
+                drop_dn[b] = 1
+            # NB: arc c = (y, z) must not be dropped here. Its detour runs through
+            # the lower vertex x, which an up-down (elimination-tree) search cannot
+            # use, so removing it would break correctness.
+        return drop_up, drop_dn
+
+    def query_pruned(self, s, t, drop_up, drop_dn):
+        """Elimination-tree query that ignores the arcs marked as removable."""
+        up, down = self.up, self.down
+        saved_up = [up[a] for a in range(self.m) if drop_up[a]]
+        saved_dn = [down[a] for a in range(self.m) if drop_dn[a]]
+        for a in range(self.m):
+            if drop_up[a]:
+                up[a] = INF
+            if drop_dn[a]:
+                down[a] = INF
+        try:
+            return self.query(s, t)[0]
+        finally:
+            i = j = 0
+            for a in range(self.m):
+                if drop_up[a]:
+                    up[a] = saved_up[i]
+                    i += 1
+                if drop_dn[a]:
+                    down[a] = saved_dn[j]
+                    j += 1
+
     def has_negative_cycle(self):
         up, down = self.up, self.down
         return any(up[a] + down[a] < -1e-9 for a in range(self.m))

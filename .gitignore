@@ -9,3 +9,6 @@ __pycache__/
 *.log
 results_*.json
 results*.csv
+cpp/*.obj
+cpp/*.exe
+cpp/data/
