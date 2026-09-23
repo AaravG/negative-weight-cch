@@ -240,15 +240,30 @@ class CCH:
                     down[a] = w
         return up, down
 
-    def customize(self, g):
+    def customize(self, g, stop_on_negative_cycle=False):
         """Full customization from the weights currently in g.
-        Returns the list of arcs that witness a negative cycle (empty if none)."""
+        Returns the list of arcs that witness a negative cycle (empty if none).
+
+        With stop_on_negative_cycle, elimination stops as soon as a cycle becomes
+        apparent: when vertex x is eliminated its arcs are final, so a negative
+        2-cycle on one of them is a negative cycle of the input."""
         self.edge_w = array("d", (w for u in range(self.n) for _, w in g.adj[u]))
         self.base_up, self.base_down = self.base_weights()
         up, down = array("d", self.base_up), array("d", self.base_down)
         ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
+        first = self.first
+        x = 0
         for i in range(len(ta)):
             a, b, c = ta[i], tb[i], tc[i]
+            if stop_on_negative_cycle:
+                # arcs of every vertex below the current one are final by now
+                while x < self.n and first[x + 1] <= a:
+                    for aa in range(first[x], first[x + 1]):
+                        if up[aa] + down[aa] < -1e-9:
+                            self.up, self.down = up, down
+                            self.cycle_arc = aa
+                            return [aa]
+                    x += 1
             # y -> x -> z   and   z -> x -> y
             v = down[a] + up[b]
             if v < up[c]:

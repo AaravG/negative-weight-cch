@@ -101,6 +101,38 @@ The main open question is **size**: each shortcut stores the upper envelope of s
 
 A closer look ([`results/results_battery_profiles.md`](results/results_battery_profiles.md), `battery_profiles.py`): 94–97% of shortcut directions have exactly one piece and only 0.11–0.17% have more than 10. The large profiles are genuine trade-offs (their pieces differ by roughly 0.1–10%, far above rounding error), they concentrate at a few vertices of the hierarchy, and they are identical across battery capacities.
 
+## Three implementations
+
+| | Ordering (NY) | Customization (NY) | Query (NY) |
+|---|---:|---:|---:|
+| Pure Python (`cch.py`) | 202 s | 1.6 s | 0.77 ms |
+| Numba (`cch_nb.py`) | 12 s | 0.1 s | 0.04 ms |
+| **C++ (`cpp/cch.cpp`)** | **2.8 s** | **0.04 s** | **0.012 ms** |
+
+All three agree with the reference answers. Build the C++ version with `cpp/build.bat` (MSVC) after exporting a graph with `export_graph.py`.
+
+## Comparison with the classical (potential-based) pipeline
+
+Measured on the same hierarchy in C++ ([`results/results_cpp.md`](results/results_cpp.md)):
+
+| Approach | Potential needed | Query, NY (real elevation) | BAY |
+|---|---|---:|---:|
+| **Ours: no potential, sweep query** | **none** | **0.013 ms** | **0.007 ms** |
+| Shifted metric + sweep query | Johnson or height | 0.021 ms | 0.010 ms |
+| Height-potential CCH + Dijkstra query + stalling (Eisner/Baum style) | height (free) | 0.076 ms | 0.049 ms |
+| Johnson-shifted CCH + Dijkstra query | Johnson | 0.071 ms | 0.046 ms |
+| Johnson + plain Dijkstra | Johnson | 16 ms | 13 ms |
+
+The query gain comes from the sweep query, not from dropping the potential. What the potential-free variant removes is the potential computation, which matters when the cost model admits no height-induced potential.
+
+## Which CCH acceleration techniques survive?
+
+[`results/results_pruning.md`](results/results_pruning.md): **perfect customization** stays exact; **witness pruning** stays exact if arcs are only removed through upper/intermediate triangles (still ~60% of arc directions); **stall-on-demand is unsafe**.
+
+## Real elevation
+
+`elevation.py` fetches the public AWS Terrain Tiles (SRTM/USGS) and decodes the PNGs with the standard library only; `dimacs.py` then offers the `ev_real` metric (climbing 1 m costs 50 m of driving, sea floor clamped to 0). Real terrain gives 10.0% negative edges on New York and 10.3% on the Bay Area, with essentially unchanged timings.
+
 ## Repository layout
 
 | Files | What |
@@ -133,7 +165,6 @@ Road data is from the [9th DIMACS Implementation Challenge](http://www.diag.unir
 
 ## Limitations
 
-- Pure-Python prototype; no C++ implementation yet.
 - The inertial-flow ordering is simpler than FlowCutter/KaHIP.
 - Synthetic elevation.
 - Full-USA experiments use a Numba-compiled version; no C++ implementation yet.

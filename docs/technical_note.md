@@ -48,6 +48,16 @@ CCH customization is precisely this sparse elimination, restricted to the chorda
 
 We have not found this application stated in the route-planning literature, but it may be known to experts. Pointers are welcome.
 
+**Battery cost functions.** Our charge functions are exactly the cost functions of Eisner, Funke & Storandt (2011), written in terms of the remaining charge instead of the energy spent. With their parameters `(l_e, u_e, const_e)`:
+
+| Their cost function `c_e(b)` | Our charge function `f(b)` |
+|---|---|
+| `∞` for `b < l_e` | infeasible (`−∞`) for `b < in` |
+| `const_e` for `b ∈ [l_e, u_e]` | `b − cost` |
+| `b − u_e + const_e` for `b > u_e` | `out` (battery full) |
+
+so `in = l_e`, `cost = const_e`, `out = u_e − const_e`; uphill gives `(const_e, const_e, M − const_e)` and downhill `(0, const_e, M)`. Their realistic model `const_e = fixed_e + α·Δη` with `0 < α < 1` on descents is the `β_up = 1`, `β_down = 0.6` model used here. They prove that *chaining* keeps the description bounded; the growth we measure comes from the pointwise maximum over alternative paths, not from composition.
+
 **Scope.** We treat the *unconstrained* shortest-path problem with conservative weights. Energy-optimal EV routing with battery-capacity constraints (a state of charge bounded in `[0, M]`) is not a plain shortest-path problem; Baum et al. handle it with piecewise cost functions. We include a preliminary battery-constrained variant (monotone charge functions under max and composition), validated on small graphs only. Whether its profiles stay small on large networks is open.
 
 ---
@@ -131,6 +141,8 @@ Checking all arcs takes `O(|E⁺|)` time. This is dominated by customization its
 **Corollary 3a (local check after an update).** Suppose the metric was conservative before an update, and let `D` be the set of arcs whose customized value changed. Then the updated metric has a negative cycle **iff** some `{v,w} ∈ D` has `ℓ⁺(v,w) + ℓ⁺(w,v) < 0`.
 
 *Proof.* By Theorem 3, a negative cycle exists iff some arc has a negative 2-cycle sum. An arc outside `D` has the same values as before, when the sum was `≥ 0` by Theorem 3 applied to the conservative metric. ∎
+
+**Detection during elimination.** Because the arcs of vertex `x` are final when `x` is eliminated, the test can run inside customization: after finishing vertex `x`, check its arcs for `ℓ⁺(v,w) + ℓ⁺(w,v) < 0` and stop. `cch.py` implements this (`customize(..., stop_on_negative_cycle=True)`); on small graphs with an injected cycle it stops almost immediately instead of completing the customization.
 
 **Handling a detected cycle.** A negative cycle means shortest paths are undefined, and **no feasible potential exists**, so falling back to potential shifting is impossible. The only sensible reaction is to reject the update: apply the inverse partial update, which restores the previous customization exactly (Theorem 4), or clamp the offending input weights. Our experiments exercise this reject-and-restore path (§5.5).
 
@@ -289,13 +301,16 @@ A potential-free CCH for the full USA graph was not built. The prototype's in-me
 
 ## 6 Limitations and future work
 
-- **Implementation.** Absolute times come from a Python prototype. Published C++ CCH implementations are 1–2 orders of magnitude faster, and FlowCutter/KaHIP orders are better than our inertial-flow order. The time ratios are indicative only (see §5); scan and expansion counts transfer.
+- **Implementations.** Pure Python (reference), Numba (continental scale) and C++ (`cpp/cch.cpp`, MSVC /O2). New York: ordering 2.8 s, customization 0.04 s, query 0.012 ms in C++, against 202 s / 1.6 s / 0.77 ms in pure Python. All three agree with the reference answers.
+- **Real elevation (`results/results_cpp.md`).** Repeating the experiments with real terrain (AWS Terrain Tiles, SRTM/USGS, zoom 11) instead of synthetic hills gives 10.0% negative arcs on New York and 10.3% on the Bay Area, and essentially unchanged timings.
+- **Comparison with the classical pipeline (`results/results_cpp.md`).** On the same hierarchy we also run (i) the height-potential approach of Eisner et al. / Baum et al. and (ii) Johnson-shifted weights, both with the usual Dijkstra-based CCH query and stall-on-demand. All agree. Their queries take 0.046–0.100 ms against 0.007–0.013 ms for the potential-free sweep query; the shifted metric with our sweep query is 0.010–0.022 ms. The query gain therefore comes from the sweep query, not from dropping the potential: what the potential-free variant removes is the potential computation itself, which matters when no height-induced potential exists.
+- **Remaining implementation caveat.** Absolute times come from a Python prototype in the earlier sections. Published C++ CCH implementations are 1–2 orders of magnitude faster, and FlowCutter/KaHIP orders are better than our inertial-flow order. The time ratios are indicative only (see §5); scan and expansion counts transfer.
 - **Negative cycles.** These are detected exactly, but the only possible "recovery" is to reject or undo the offending update (§3). Policies for real systems — clamping recuperation values, or validating updates before applying them — are application decisions.
 - **Other baselines.** We compare against potential-based query methods and Bellman–Ford, not against implementations of the near-linear negative-SSSP algorithms. Those solve a different task (one potential or tree per metric) and would still require a query structure afterwards.
 - **Scale.** The full-USA CCH still needs to be built, which requires a compact memory layout.
 - **Synthetic energy model.** Real elevation data (e.g. SRTM) and a calibrated EV consumption model are needed.
 - **Battery constraints.** State-of-charge bounds make path costs non-additive, as noted in the Scope paragraph of §1. Whether CCH customization can be lifted to the bounded cost functions of Baum et al. without a potential is open.
-- **Acceleration techniques.** Only basic customization and the elimination-tree query are studied here. Stall-on-demand is invalid with negative weights (§3). Perfect customization, witness pruning and search-space pruning rules have sign-agnostic-looking proofs, but we have not verified them; some of them may not carry over, which would cost part of the usual CCH speed-up.
+- **Acceleration techniques (measured, `results/results_pruning.md`).** Perfect customization stays exact with negative weights (0 mismatches in 3,618 arc distances). Witness pruning stays exact when arcs may only be removed via *upper or intermediate* triangles, i.e. detours through higher-ranked vertices (0 of 225 queries wrong, about 60% of arc directions still removable); allowing detours through lower-ranked vertices breaks it. Stall-on-demand is unsafe: in 850 observed cases a vertex would have been stalled although its sweep label was already exact.
 - **Parallel customization** carries over unchanged (level-synchronous processing does not depend on sign).
 - **Turn costs, one-to-many queries.** Not studied.
 
