@@ -5,8 +5,12 @@
 //     --queries <n>      number of random queries (default 1000)
 //     --check <n>        verify this many of them against Dijkstra + Johnson potential
 //     --metric <name>    metric to use (default: all in meta.txt)
-//     --shifted-cch      also run the potential-shifted CCH baseline (Dijkstra query
-//                        with stall-on-demand), i.e. the classical approach
+//     --shifted-cch      also run the classical pipelines on the same hierarchy: shift by a
+//                        height-induced or Johnson potential, customize the shifted metric,
+//                        query it with the elimination-tree query and with the Dijkstra-based
+//                        CCH query (with and without stall-on-demand)
+//     --parallel <t>     also run level-parallel customization with t threads
+//     --repeat <r>       repetitions per timing; medians are reported (default 5)
 //
 // Graph directory: meta.txt (n, m, metric names), off.i64, tgt.i32, x.f64, y.f64,
 // w_<metric>.f64 - written by export_graph.py.
@@ -598,15 +602,19 @@ static double dijkstra_potential(const Graph& g, const vector<double>& w, const 
     return dist[t] == INF ? INF : dist[t] - p[s] + p[t];
 }
 
-// Johnson potential (queue-based Bellman-Ford)
-static vector<double> johnson_potential(const Graph& g, const vector<double>& w) {
+// Johnson potential: FIFO (queue-based) Bellman-Ford from a virtual source with a
+// 0-arc to every vertex. O(nm) worst case; `pops` counts queue removals.
+// No negative-cycle detection: only call it on a conservative metric.
+static vector<double> johnson_potential(const Graph& g, const vector<double>& w, i64& pops) {
     vector<double> p(g.n, 0.0);
     vector<char> inq(g.n, 1);
     std::deque<i64> q;
     for (i64 v = 0; v < g.n; v++) q.push_back(v);
+    pops = 0;
     while (!q.empty()) {
         const i64 u = q.front();
         q.pop_front();
+        pops++;
         inq[u] = 0;
         for (i64 k = g.off[u]; k < g.off[u + 1]; k++) {
             const i64 v = g.tgt[k];
@@ -617,6 +625,32 @@ static vector<double> johnson_potential(const Graph& g, const vector<double>& w)
             }
         }
     }
+    return p;
+}
+
+// The same virtual-source potential p(v) = min(0, min_u dist(u,v)), read off a
+// customized CCH in two linear sweeps: every shortest u-v path has an up-down
+// representative (Theorem 1), so an upward pass over all vertices in increasing
+// rank followed by a downward pass in decreasing rank finds it. O(|E+|) time.
+static vector<double> cch_potential(const CCH& c, const vector<double>& up, const vector<double>& dn) {
+    vector<double> pr(c.n, 0.0);            // indexed by rank
+    for (i64 x = 0; x < c.n; x++) {
+        const double px = pr[x];
+        for (i64 a = c.first[x]; a < c.first[x + 1]; a++) {
+            const double v = px + up[a];
+            if (v < pr[c.head[a]]) pr[c.head[a]] = v;
+        }
+    }
+    for (i64 x = c.n - 1; x >= 0; x--) {
+        double best = pr[x];
+        for (i64 a = c.first[x]; a < c.first[x + 1]; a++) {
+            const double v = pr[c.head[a]] + dn[a];
+            if (v < best) best = v;
+        }
+        pr[x] = best;
+    }
+    vector<double> p(c.n);
+    for (i64 v = 0; v < c.n; v++) p[v] = pr[c.rank[v]];
     return p;
 }
 
@@ -676,12 +710,38 @@ struct ShiftedQuery {
 
 // ------------------------------------------------------------------- main
 
+// Repeated measurements: median and range, in milliseconds.
+struct Timing {
+    vector<double> ms;
+    void add(double seconds) { ms.push_back(1000.0 * seconds); }
+    double med() const {
+        vector<double> v = ms;
+        std::sort(v.begin(), v.end());
+        const size_t k = v.size();
+        return k % 2 ? v[k / 2] : 0.5 * (v[k / 2 - 1] + v[k / 2]);
+    }
+    std::string str() const {
+        char b[160];
+        snprintf(b, sizeof b, "%.4f ms (median of %zu, range %.4f-%.4f)", med(), ms.size(),
+                 *std::min_element(ms.begin(), ms.end()), *std::max_element(ms.begin(), ms.end()));
+        return b;
+    }
+};
+
+static bool same(double a, double b) {
+    return a == b || std::abs(a - b) <= 1e-6 * std::max(1.0, std::abs(b));
+}
+
 int main(int argc, char** argv) {
-    if (argc < 2) { fprintf(stderr, "usage: cch <graph-dir> [--order f] [--queries n] [--check n] [--metric m] [--shifted-cch]\n"); return 1; }
+    if (argc < 2) {
+        fprintf(stderr, "usage: cch <graph-dir> [--order f] [--queries n] [--check n] [--metric m] "
+                        "[--shifted-cch] [--parallel threads] [--repeat r]\n");
+        return 1;
+    }
     std::string dir = argv[1], order_file, only_metric;
     i64 nq = 1000, ncheck = 20;
     bool shifted_cch = false;
-    int threads = 0;
+    int threads = 0, reps = 5;
     for (int i = 2; i < argc; i++) {
         std::string a = argv[i];
         if (a == "--order" && i + 1 < argc) order_file = argv[++i];
@@ -690,6 +750,7 @@ int main(int argc, char** argv) {
         else if (a == "--metric" && i + 1 < argc) only_metric = argv[++i];
         else if (a == "--shifted-cch") shifted_cch = true;
         else if (a == "--parallel" && i + 1 < argc) threads = std::stoi(argv[++i]);
+        else if (a == "--repeat" && i + 1 < argc) reps = std::max(1, std::stoi(argv[++i]));
     }
 
     Graph g;
@@ -721,6 +782,8 @@ int main(int argc, char** argv) {
     c.map_arcs(g);
     printf("contraction: arcs=%zu triangles=%lld depth=%lld (symbolic %.1fs, mapping %.1fs)\n",
            c.head.size(), (long long)c.triangles, (long long)c.depth, t_sym, now() - t0);
+    printf("repetitions per timing: %d; queries: %lld random pairs; verified: %lld\n", reps,
+           (long long)nq, (long long)ncheck);
 
     std::mt19937_64 rng(7);
     vector<std::pair<i64, i64>> pairs;
@@ -730,144 +793,204 @@ int main(int argc, char** argv) {
     vector<double> up, dn, dist(g.n);
     vector<char> done(g.n);
     Query q(c);
+    ShiftedQuery sq(c);
     for (const auto& metric : g.metrics) {
         if (!only_metric.empty() && metric != only_metric) continue;
         const vector<double> w = g.weights(metric);
-        t0 = now();
-        c.customize(w, up, dn);
-        const double t_cust = now() - t0;
-        if (threads > 0) {
+        const char* M = metric.c_str();
+
+        i64 neg_arcs = 0, neg_loops = 0;
+        for (i64 u = 0; u < g.n; u++)
+            for (i64 k = g.off[u]; k < g.off[u + 1]; k++) {
+                if (w[k] < 0) neg_arcs++;
+                if (g.tgt[k] == u && w[k] < 0) neg_loops++;   // loops never enter G+
+            }
+        printf("[%s] negative arcs: %lld (%.1f%%), negative self-loops: %lld\n", M,
+               (long long)neg_arcs, 100.0 * neg_arcs / g.m, (long long)neg_loops);
+
+        Timing t_cust;
+        for (int r = 0; r < reps; r++) {
+            t0 = now();
+            c.customize(w, up, dn);
+            t_cust.add(now() - t0);
+        }
+        Timing t_neg;
+        i64 neg = 0;
+        for (int r = 0; r < reps; r++) {
+            t0 = now();
+            neg = c.negative_cycle_arcs(up, dn);
+            t_neg.add(now() - t0);
+        }
+        printf("[%s] customization (no potential): %s\n", M, t_cust.str().c_str());
+        printf("[%s] negative-cycle scan: %s, %lld arcs with a negative 2-cycle\n", M,
+               t_neg.str().c_str(), (long long)neg);
+
+        // Level-parallel customization, run last so that its multi-threaded load
+        // does not affect the single-threaded timings above.
+        auto parallel_check = [&]() {
+            if (threads <= 0) return;
 #ifdef _OPENMP
             omp_set_num_threads(threads);
 #endif
             vector<vector<i32>> buckets;
             c.levels(buckets);
             vector<double> pup, pdn;
-            t0 = now();
-            c.customize_parallel(w, pup, pdn, buckets);
-            const double t_par = now() - t0;
-            i64 diff = 0;
+            Timing t_par;
+            for (int r = 0; r < reps; r++) {
+                t0 = now();
+                c.customize_parallel(w, pup, pdn, buckets);
+                t_par.add(now() - t0);
+            }
+            i64 diff = 0;   // exact comparison (INF == INF holds; no NaN can occur)
             for (size_t a = 0; a < up.size(); a++)
-                if (!((up[a] == pup[a] || std::abs(up[a] - pup[a]) < 1e-9) &&
-                      (dn[a] == pdn[a] || std::abs(dn[a] - pdn[a]) < 1e-9))) diff++;
-            printf("[%s] parallel customization (%d threads, %zu levels): %.2fs (%.1fx), "
-                   "arcs differing from serial: %lld\n",
-                   metric.c_str(), threads, buckets.size(), t_par, t_cust / t_par, (long long)diff);
-        }
-        t0 = now();
-        const i64 neg = c.negative_cycle_arcs(up, dn);
-        const double t_neg = now() - t0;
+                if (!(up[a] == pup[a] && dn[a] == pdn[a])) diff++;
+            printf("[%s] parallel customization (%d threads, %zu levels): %s, speed-up %.2fx, "
+                   "arcs differing from serial (exact comparison): %lld\n",
+                   M, threads, buckets.size(), t_par.str().c_str(), t_cust.med() / t_par.med(),
+                   (long long)diff);
+        };
 
-        t0 = now();
-        double sink = 0;
-        for (auto [s, t] : pairs) sink += q.run(s, t, up, dn) == INF ? 0.0 : 1.0;
-        const double t_q = (now() - t0) / (double)pairs.size();
-
-        printf("[%s] customize %.2fs | negative-cycle scan %.2fs (%lld arcs) | "
-               "query %.3f ms (%.0f reachable)\n",
-               metric.c_str(), t_cust, t_neg, (long long)neg, 1000 * t_q, sink);
-
-        if (ncheck > 0) {
+        Timing t_q;
+        i64 reach = 0;
+        for (auto [s, t] : pairs) q.run(s, t, up, dn);   // warm-up, not timed
+        for (int r = 0; r < reps; r++) {
+            reach = 0;
             t0 = now();
-            const vector<double> p = johnson_potential(g, w);
-            const double t_pot = now() - t0;
-            i64 ok = 0, scanned = 0;
-            double t_ref = 0;
-            for (i64 i = 0; i < ncheck; i++) {
-                const auto [s, t] = pairs[i];
-                const double got = q.run(s, t, up, dn);
-                const double t1 = now();
-                const double want = dijkstra_potential(g, w, p, s, t, dist, done, scanned);
-                t_ref += now() - t1;
-                if (got == want || std::abs(got - want) <= 1e-6 * std::max(1.0, std::abs(want))) ok++;
-            }
-            printf("[%s] Johnson potential %.2fs | Dijkstra+potential %.0f ms/query | correct %lld/%lld\n",
-                   metric.c_str(), t_pot, 1000 * t_ref / (double)ncheck, (long long)ok, (long long)ncheck);
+            for (auto [s, t] : pairs) reach += q.run(s, t, up, dn) == INF ? 0 : 1;
+            t_q.add((now() - t0) / (double)pairs.size());
+        }
+        printf("[%s] elimination-tree query (no potential): %s per query, %lld/%zu reachable\n", M,
+               t_q.str().c_str(), (long long)reach, pairs.size());
 
-            // height-induced potential (free; the classical EV approach) for the ev metric
-            vector<double> zm = g.z;
-            if (std::filesystem::exists(dir + "/z_" + metric + ".f64"))
-                zm = read_bin<double>(dir + "/z_" + metric + ".f64");
-            else if (metric != "ev") zm.clear();
-            if (shifted_cch && !zm.empty()) {
-                const double BETA_DOWN = 0.6;
-                vector<double> ph(g.n);
-                for (i64 v = 0; v < g.n; v++) ph[v] = BETA_DOWN * zm[v];
-                double worst = 0;
-                for (i64 u = 0; u < g.n; u++)
-                    for (i64 k = g.off[u]; k < g.off[u + 1]; k++)
-                        worst = std::min(worst, w[k] + ph[u] - ph[g.tgt[k]]);
-                printf("[%s] height-induced potential: free to compute, min reduced weight %.3g\n",
-                       metric.c_str(), worst);
-                vector<double> wh(w.size());
-                for (i64 u = 0; u < g.n; u++)
-                    for (i64 k = g.off[u]; k < g.off[u + 1]; k++)
-                        wh[k] = std::max(0.0, w[k] + ph[u] - ph[g.tgt[k]]);
-                vector<double> hup, hdn;
-                t0 = now();
-                c.customize(wh, hup, hdn);
-                const double t_ch = now() - t0;
-                ShiftedQuery hq(c);
-                i64 settled_total = 0, okk = 0;
-                t0 = now();
-                for (i64 i = 0; i < (i64)pairs.size(); i++) {
-                    i64 settled = 0;
-                    const auto [s, t] = pairs[i];
-                    const double got = hq.run(s, t, hup, hdn, true, settled);
-                    settled_total += settled;
-                    if (i < ncheck) {
-                        const double ours = q.run(s, t, up, dn);
-                        const double back = got == INF ? INF : got - ph[s] + ph[t];
-                        if (back == ours || std::abs(back - ours) <= 1e-6 * std::max(1.0, std::abs(ours))) okk++;
-                    }
+        Timing t_pc;
+        vector<double> pc;
+        for (int r = 0; r < reps; r++) {
+            t0 = now();
+            pc = cch_potential(c, up, dn);
+            t_pc.add(now() - t0);
+        }
+        double worst_pc = 0;
+        for (i64 u = 0; u < g.n; u++)
+            for (i64 k = g.off[u]; k < g.off[u + 1]; k++)
+                if (g.tgt[k] != u) worst_pc = std::min(worst_pc, w[k] + pc[u] - pc[g.tgt[k]]);
+        printf("[%s] potential read off the CCH (two sweeps): %s, min reduced weight %.3g\n", M,
+               t_pc.str().c_str(), worst_pc);
+
+        if (ncheck <= 0) { parallel_check(); continue; }
+
+        Timing t_pot;
+        vector<double> p;
+        i64 pops = 0;
+        for (int r = 0; r < reps; r++) {
+            t0 = now();
+            p = johnson_potential(g, w, pops);
+            t_pot.add(now() - t0);
+        }
+        double maxdiff = 0;
+        for (i64 v = 0; v < g.n; v++) maxdiff = std::max(maxdiff, std::abs(p[v] - pc[v]));
+        printf("[%s] Johnson potential (FIFO Bellman-Ford): %s, %.2f queue pops per vertex, "
+               "max |p_BF - p_CCH| = %.3g\n", M, t_pot.str().c_str(), (double)pops / g.n, maxdiff);
+
+        i64 ok = 0, scanned = 0;
+        double t_ref = 0;
+        for (i64 i = 0; i < ncheck && i < (i64)pairs.size(); i++) {
+            const auto [s, t] = pairs[i];
+            const double got = q.run(s, t, up, dn);
+            const double t1 = now();
+            const double want = dijkstra_potential(g, w, p, s, t, dist, done, scanned);
+            t_ref += now() - t1;
+            if (same(got, want)) ok++;
+        }
+        const i64 nchk = std::min<i64>(ncheck, (i64)pairs.size());
+        printf("[%s] verified against Dijkstra with Johnson potential: %lld/%lld correct "
+               "(reference %.1f ms per query)\n", M, (long long)ok, (long long)nchk,
+               1000 * t_ref / (double)nchk);
+
+        if (!shifted_cch) { parallel_check(); continue; }
+
+        // Classical pipelines on the same hierarchy: shift by a potential, customize the
+        // shifted (non-negative) metric, and query it with the elimination-tree query or
+        // with the Dijkstra-based bidirectional CCH query (with and without stall-on-demand).
+        auto baseline = [&](const char* name, const vector<double>& pot, bool clamp) {
+            vector<double> ws(w.size());
+            for (i64 u = 0; u < g.n; u++)
+                for (i64 k = g.off[u]; k < g.off[u + 1]; k++) {
+                    const double r = w[k] + pot[u] - pot[g.tgt[k]];
+                    ws[k] = clamp ? std::max(0.0, r) : r;
                 }
-                const double t_hq = (now() - t0) / (double)pairs.size();
-                printf("[%s] height-potential CCH (Dijkstra query + stalling): customize %.2fs, "
-                       "query %.3f ms, %lld settled/query, agrees %lld/%lld\n",
-                       metric.c_str(), t_ch, 1000 * t_hq, (long long)(settled_total / pairs.size()),
-                       (long long)okk, (long long)ncheck);
-            }
-
-            if (shifted_cch) {
-                // classical approach: shift weights by the potential, then CCH with a
-                // Dijkstra-based query (stall-on-demand allowed)
-                vector<double> ws(w.size());
-                for (i64 u = 0; u < g.n; u++)
-                    for (i64 k = g.off[u]; k < g.off[u + 1]; k++)
-                        ws[k] = w[k] + p[u] - p[g.tgt[k]];
-                vector<double> sup, sdn;
+            vector<double> sup, sdn;
+            Timing t_cs;
+            for (int r = 0; r < reps; r++) {
                 t0 = now();
                 c.customize(ws, sup, sdn);
-                const double t_cs = now() - t0;
-                ShiftedQuery sq(c);
-                for (int stall = 0; stall < 2; stall++) {
-                    i64 settled_total = 0, okk = 0;
-                    t0 = now();
-                    for (i64 i = 0; i < (i64)pairs.size(); i++) {
-                        i64 settled = 0;
-                        const auto [s, t] = pairs[i];
-                        const double got = sq.run(s, t, sup, sdn, stall == 1, settled);
-                        settled_total += settled;
-                        if (i < ncheck) {
-                            const double ours = q.run(s, t, up, dn);
-                            const double back = got == INF ? INF : got - p[s] + p[t];
-                            if (back == ours || std::abs(back - ours) <= 1e-6 * std::max(1.0, std::abs(ours))) okk++;
-                        }
-                    }
-                    const double t_sq = (now() - t0) / (double)pairs.size();
-                    if (stall == 0) {   // same shifted metric, but with our sweep query
-                        t0 = now();
-                        for (const auto& pr : pairs) q.run(pr.first, pr.second, sup, sdn);
-                        printf("[%s] shifted CCH (elimination-tree query): query %.3f ms\n",
-                               metric.c_str(), 1000 * (now() - t0) / (double)pairs.size());
-                    }
-                    printf("[%s] shifted CCH (Dijkstra query%s): customize %.2fs + potential %.2fs, "
-                           "query %.3f ms, %lld settled/query, agrees %lld/%lld\n",
-                           metric.c_str(), stall ? " + stalling" : "", t_cs, t_pot, 1000 * t_sq,
-                           (long long)(settled_total / pairs.size()), (long long)okk, (long long)ncheck);
-                }
+                t_cs.add(now() - t0);
             }
+            printf("[%s] %s-shifted: customization %s\n", M, name, t_cs.str().c_str());
+            i64 agree = 0;
+            for (i64 i = 0; i < nchk; i++) {
+                const auto [s, t] = pairs[i];
+                const double got = q.run(s, t, sup, sdn);
+                const double back = got == INF ? INF : got - pot[s] + pot[t];
+                if (same(back, q.run(s, t, up, dn))) agree++;
+            }
+            Timing t_et;
+            for (auto [s, t] : pairs) q.run(s, t, sup, sdn);   // warm-up, not timed
+            for (int r = 0; r < reps; r++) {
+                t0 = now();
+                for (auto [s, t] : pairs) q.run(s, t, sup, sdn);
+                t_et.add((now() - t0) / (double)pairs.size());
+            }
+            printf("[%s] %s-shifted + elimination-tree query: %s per query, agrees %lld/%lld\n", M,
+                   name, t_et.str().c_str(), (long long)agree, (long long)nchk);
+            for (int stall = 0; stall < 2; stall++) {
+                i64 settled_total = 0, okk = 0;
+                Timing t_dq;
+                for (auto [s, t] : pairs) {                   // warm-up, not timed
+                    i64 settled = 0;
+                    sq.run(s, t, sup, sdn, stall == 1, settled);
+                }
+                for (int r = 0; r < reps; r++) {
+                    settled_total = 0;
+                    t0 = now();
+                    for (auto [s, t] : pairs) {
+                        i64 settled = 0;
+                        sq.run(s, t, sup, sdn, stall == 1, settled);
+                        settled_total += settled;
+                    }
+                    t_dq.add((now() - t0) / (double)pairs.size());
+                }
+                for (i64 i = 0; i < nchk; i++) {
+                    const auto [s, t] = pairs[i];
+                    i64 settled = 0;
+                    const double got = sq.run(s, t, sup, sdn, stall == 1, settled);
+                    const double back = got == INF ? INF : got - pot[s] + pot[t];
+                    if (same(back, q.run(s, t, up, dn))) okk++;
+                }
+                printf("[%s] %s-shifted + Dijkstra-based CCH query%s: %s per query, "
+                       "%lld settled/query, agrees %lld/%lld\n", M, name,
+                       stall ? " + stall-on-demand" : "", t_dq.str().c_str(),
+                       (long long)(settled_total / (i64)pairs.size()), (long long)okk, (long long)nchk);
+            }
+        };
+
+        // height-induced potential (free; the classical EV approach) where elevations exist
+        vector<double> zm = g.z;
+        if (std::filesystem::exists(dir + "/z_" + metric + ".f64"))
+            zm = read_bin<double>(dir + "/z_" + metric + ".f64");
+        else if (metric != "ev") zm.clear();
+        if (!zm.empty()) {
+            const double BETA_DOWN = 0.6;
+            vector<double> ph(g.n);
+            for (i64 v = 0; v < g.n; v++) ph[v] = BETA_DOWN * zm[v];
+            double worst = 0;
+            for (i64 u = 0; u < g.n; u++)
+                for (i64 k = g.off[u]; k < g.off[u + 1]; k++)
+                    worst = std::min(worst, w[k] + ph[u] - ph[g.tgt[k]]);
+            printf("[%s] height-induced potential: free, min reduced weight %.3g\n", M, worst);
+            baseline("height", ph, true);
         }
+        baseline("Johnson", p, false);
+        parallel_check();
     }
     return 0;
 }

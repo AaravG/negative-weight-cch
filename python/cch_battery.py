@@ -100,7 +100,9 @@ def dominates(f, g, M):
 
 
 def prune(fs, M):
-    """Upper envelope as a minimal Pareto set of triples."""
+    """Pairwise non-dominated set of triples: a function is dropped only if a single
+    other function dominates it. It may still lie below the maximum of several
+    others, so the set is not necessarily minimal."""
     fs = sorted(fs, key=lambda f: (f[0], f[1], -f[2]))
     out = []
     for f in fs:

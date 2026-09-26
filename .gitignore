@@ -12,3 +12,4 @@ results*.csv
 cpp/*.obj
 cpp/*.exe
 cpp/data/
+paper/

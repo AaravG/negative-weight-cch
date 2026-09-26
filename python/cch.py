@@ -109,8 +109,9 @@ def _place(rank, A, B, sep, lo, stack):
 # --------------------------------------------------------- 2. contraction
 
 class CCH:
-    def __init__(self, g, xy=None, leaf=64, method="flow", log=print):
-        """g: graphs.Graph (adj lists). xy: coordinates for the ordering."""
+    def __init__(self, g, xy=None, leaf=64, method="flow", log=print, order=None):
+        """g: graphs.Graph (adj lists). xy: coordinates for the ordering.
+        order: optional explicit rank[v] (0 = lowest), e.g. for hand-built examples."""
         t0 = time.perf_counter()
         n = g.n
         self.n = n
@@ -120,8 +121,12 @@ class CCH:
                 if u != v:
                     und[u].add(v)
                     und[v].add(u)
-        xy = xy or g.coords
-        rank = nested_dissection_order(n, und, xy, leaf, method)
+        if order is not None:
+            assert sorted(order) == list(range(n)), "order must be a permutation"
+            rank = array("i", order)
+        else:
+            xy = xy or g.coords
+            rank = nested_dissection_order(n, und, xy, leaf, method)
         self.rank = rank
         self.t_order = time.perf_counter() - t0
 
@@ -195,6 +200,7 @@ class CCH:
                 lo_, hi_ = (ru, rv) if ru < rv else (rv, ru)
                 self.edge_arc.append(self._find_arc(lo_, hi_))
                 self.edge_dir.append(1 if ru < rv else 0)
+        self.loop_edges = [k for k in range(len(self.edge_arc)) if self.edge_arc[k] < 0]
         self.t_map = time.perf_counter() - t0
         self.depth = self._max_depth()
         log(f"  CCH: n={n:,} arcs={self.m:,} triangles={len(tri_a):,} "
@@ -242,13 +248,19 @@ class CCH:
 
     def customize(self, g, stop_on_negative_cycle=False):
         """Full customization from the weights currently in g.
-        Returns the list of arcs that witness a negative cycle (empty if none).
+        Returns the list of arcs that witness a negative cycle (empty if none);
+        [-1] means a negative self-loop in the input (loops do not enter G+).
 
         With stop_on_negative_cycle, elimination stops as soon as a cycle becomes
         apparent: when vertex x is eliminated its arcs are final, so a negative
         2-cycle on one of them is a negative cycle of the input."""
         self.edge_w = array("d", (w for u in range(self.n) for _, w in g.adj[u]))
         self.base_up, self.base_down = self.base_weights()
+        # a negative self-loop is a negative cycle, but loops never enter G+
+        if any(self.edge_w[k] < 0 for k in self.loop_edges):
+            self.up, self.down = array("d", self.base_up), array("d", self.base_down)
+            self.cycle_arc = -1
+            return [-1]
         up, down = array("d", self.base_up), array("d", self.base_down)
         ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
         first = self.first
@@ -526,7 +538,11 @@ class CCH:
     def prunable_arcs(self):
         """Arcs a witness search may remove after perfect customization: the same
         distance is realised through a higher-ranked vertex (upper or
-        intermediate triangle), so an up-down path still exists."""
+        intermediate triangle), so an up-down path still exists.
+
+        Exact when every cycle has positive length. With a zero-length cycle two
+        arcs can witness each other's removal (also for non-negative weights);
+        break ties lexicographically, e.g. by integer weights w' = (n+1)w + 1."""
         up, down = self.up, self.down
         ta, tb, tc = self.tri_a, self.tri_b, self.tri_c
         drop_up = bytearray(self.m)
@@ -572,8 +588,11 @@ class CCH:
     def update_edges_tiebased(self, changes):
         """Partial update in the style of Dibbelt et al. (2016), section 7.7:
         propagate a change only to arcs whose value was *realised* by the old
-        value (an equality test), instead of re-evaluating every arc above.
-        Correctness with negative weights is what this method is used to test."""
+        value (a tie test), instead of re-evaluating every arc above. A decrease
+        can also create a new witness where the old value was not tight, so a
+        change is propagated as well when the new candidate improves the target.
+        Both tests are needed for non-negative weights too. Comparisons are exact:
+        every candidate is the same floating-point sum as in customize()."""
         if not hasattr(self, "by_c"):
             self.build_update_index()
         up, down, bu, bd = self.up, self.down, self.base_up, self.base_down
@@ -583,8 +602,6 @@ class CCH:
         coff, cids = self.by_c
         soff, sids = self.as_side
         tail = self.tail
-        eps = 1e-9
-
         touched = set()
         for k, w in changes:
             ew[k] = w
@@ -603,6 +620,7 @@ class CCH:
         heapq.heapify(heap)
         queued = set(touched)
         evaluated = 0
+        self.last_changed = changed = []
         while heap:
             _, c = heapq.heappop(heap)
             evaluated += 1
@@ -615,8 +633,9 @@ class CCH:
                 nu = min(nu, down[a] + up[b])
                 nd = min(nd, down[b] + up[a])
             up[c], down[c] = nu, nd
-            if abs(nu - old_up) < eps and abs(nd - old_dn) < eps:
+            if nu == old_up and nd == old_dn:
                 continue
+            changed.append(c)
             # propagate only where the OLD value was realised (the tie test)
             for j in range(soff[c], soff[c + 1]):
                 t = sids[j]
@@ -630,23 +649,26 @@ class CCH:
                     old_cd, new_cd = old_dn + up[partner], down[c] + up[partner]
                 # the old value was this arc's witness (it may have to rise), or
                 # the new value improves it (it may have to fall)
-                realised_up = abs(up[e] - old_cu) < eps or new_cu < up[e] - eps
-                realised_dn = abs(down[e] - old_cd) < eps or new_cd < down[e] - eps
+                realised_up = up[e] == old_cu or new_cu < up[e]
+                realised_dn = down[e] == old_cd or new_cd < down[e]
                 if (realised_up or realised_dn) and e not in queued:
                     queued.add(e)
                     heapq.heappush(heap, (tail[e], e))
         return evaluated
 
+    def _negative_loop(self):
+        return any(self.edge_w[k] < 0 for k in self.loop_edges)
+
     def has_negative_cycle(self):
         up, down = self.up, self.down
-        return any(up[a] + down[a] < -1e-9 for a in range(self.m))
+        return self._negative_loop() or any(up[a] + down[a] < -1e-9 for a in range(self.m))
 
     def update_created_negative_cycle(self):
         """Exact test after update_edges(), valid when the metric before the
         update was conservative: an arc whose value did not change still has
         up + down >= 0, so only the changed arcs need checking."""
         up, down = self.up, self.down
-        return any(up[a] + down[a] < -1e-9 for a in self.last_changed)
+        return self._negative_loop() or any(up[a] + down[a] < -1e-9 for a in self.last_changed)
 
     # ----------------------------------------------------------- 4. query
 
@@ -708,3 +730,26 @@ class CCH:
                         dr[y] = v
             x = parent[x]
         return best, scanned
+
+    def potential(self):
+        """A feasible potential read off the customized CCH (conservative metric):
+        p(v) = min(0, min_u dist(u, v)), the virtual-source distances that
+        Johnson's algorithm computes with Bellman-Ford. Every shortest u-v path
+        has an up-down representative in G+, so an upward pass over all vertices
+        in increasing rank and a downward pass in decreasing rank suffice: O(|E+|)."""
+        first, head, up, down = self.first, self.head, self.up, self.down
+        p = [0.0] * self.n                 # indexed by rank
+        for x in range(self.n):
+            px = p[x]
+            for a in range(first[x], first[x + 1]):
+                v = px + up[a]
+                if v < p[head[a]]:
+                    p[head[a]] = v
+        for x in range(self.n - 1, -1, -1):
+            best = p[x]
+            for a in range(first[x], first[x + 1]):
+                v = p[head[a]] + down[a]
+                if v < best:
+                    best = v
+            p[x] = best
+        return [p[self.rank[v]] for v in range(self.n)]

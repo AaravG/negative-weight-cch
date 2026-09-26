@@ -1,17 +1,34 @@
-USA: n=23,947,347 m=58,333,344 metrics=['ev', 'shifted'] z=True -> cpp\data\USA
 graph: n=23947347 m=58333344 metrics=2 (0.5s)
 undirected: 57708624 slots (1.6s)
-order: 1204.1s
-contraction: arcs=96734624 triangles=3151504591 depth=3762 (symbolic 1.4s, mapping 1.0s)
-[ev] customize 5.78s | negative-cycle scan 0.03s (0 arcs) | query 0.622 ms (1000 reachable)
-[ev] Johnson potential 2.56s | Dijkstra+potential 1577 ms/query | correct 20/20
-[ev] height-induced potential: free to compute, min reduced weight 0
-[ev] height-potential CCH (Dijkstra query + stalling): customize 5.56s, query 2.691 ms, 1585 settled/query, agrees 20/20
-[ev] shifted CCH (elimination-tree query): query 0.614 ms
-[ev] shifted CCH (Dijkstra query): customize 5.63s + potential 2.56s, query 2.894 ms, 3009 settled/query, agrees 20/20
-[ev] shifted CCH (Dijkstra query + stalling): customize 5.63s + potential 2.56s, query 2.583 ms, 1585 settled/query, agrees 20/20
-[shifted] customize 5.48s | negative-cycle scan 0.03s (0 arcs) | query 0.640 ms (1000 reachable)
-[shifted] Johnson potential 1.33s | Dijkstra+potential 1529 ms/query | correct 20/20
-[shifted] shifted CCH (elimination-tree query): query 0.635 ms
-[shifted] shifted CCH (Dijkstra query): customize 5.72s + potential 1.33s, query 2.856 ms, 3004 settled/query, agrees 20/20
-[shifted] shifted CCH (Dijkstra query + stalling): customize 5.72s + potential 1.33s, query 2.649 ms, 1581 settled/query, agrees 20/20
+order: loaded from data/USA/order.i32
+contraction: arcs=96734624 triangles=3151504591 depth=3762 (symbolic 1.3s, mapping 1.0s)
+repetitions per timing: 5; queries: 1000 random pairs; verified: 100
+[ev] negative arcs: 5836124 (10.0%), negative self-loops: 0
+[ev] customization (no potential): 5340.9203 ms (median of 5, range 5288.0682-5750.8615)
+[ev] negative-cycle scan: 39.1408 ms (median of 5, range 38.5057-40.6316), 0 arcs with a negative 2-cycle
+[ev] elimination-tree query (no potential): 0.9394 ms (median of 5, range 0.9341-0.9465) per query, 1000/1000 reachable
+[ev] potential read off the CCH (two sweeps): 362.1415 ms (median of 5, range 344.9587-417.0525), min reduced weight -7.28e-12
+[ev] Johnson potential (FIFO Bellman-Ford): 2581.9208 ms (median of 5, range 2534.9593-2692.1594), 1.76 queue pops per vertex, max |p_BF - p_CCH| = 1.64e-11
+[ev] verified against Dijkstra with Johnson potential: 100/100 correct (reference 1387.5 ms per query)
+[ev] height-induced potential: free, min reduced weight 0
+[ev] height-shifted: customization 5447.1815 ms (median of 5, range 5380.1879-5815.2107)
+[ev] height-shifted + elimination-tree query: 0.9516 ms (median of 5, range 0.9196-0.9711) per query, agrees 100/100
+[ev] height-shifted + Dijkstra-based CCH query: 2.8515 ms (median of 5, range 2.8173-2.8718) per query, 3009 settled/query, agrees 100/100
+[ev] height-shifted + Dijkstra-based CCH query + stall-on-demand: 2.5174 ms (median of 5, range 2.4834-2.5290) per query, 1585 settled/query, agrees 100/100
+[ev] Johnson-shifted: customization 5360.4310 ms (median of 5, range 5281.1523-5478.2196)
+[ev] Johnson-shifted + elimination-tree query: 0.8891 ms (median of 5, range 0.8876-0.8993) per query, agrees 100/100
+[ev] Johnson-shifted + Dijkstra-based CCH query: 2.6230 ms (median of 5, range 2.6210-2.6244) per query, 3009 settled/query, agrees 100/100
+[ev] Johnson-shifted + Dijkstra-based CCH query + stall-on-demand: 2.4246 ms (median of 5, range 2.4221-2.4432) per query, 1585 settled/query, agrees 100/100
+[ev] parallel customization (16 threads, 3763 levels): 5932.3173 ms (median of 5, range 5922.6610-6029.3999), speed-up 0.90x, arcs differing from serial (exact comparison): 0
+[shifted] negative arcs: 11823124 (20.3%), negative self-loops: 0
+[shifted] customization (no potential): 5028.8258 ms (median of 5, range 5018.0215-5033.1013)
+[shifted] negative-cycle scan: 36.4952 ms (median of 5, range 36.3806-37.2729), 0 arcs with a negative 2-cycle
+[shifted] elimination-tree query (no potential): 0.8618 ms (median of 5, range 0.8585-0.8633) per query, 1000/1000 reachable
+[shifted] potential read off the CCH (two sweeps): 331.2820 ms (median of 5, range 329.9671-335.5184), min reduced weight -4.55e-13
+[shifted] Johnson potential (FIFO Bellman-Ford): 1274.0915 ms (median of 5, range 1264.4857-1280.5613), 1.25 queue pops per vertex, max |p_BF - p_CCH| = 1.36e-12
+[shifted] verified against Dijkstra with Johnson potential: 100/100 correct (reference 1260.0 ms per query)
+[shifted] Johnson-shifted: customization 5375.0987 ms (median of 5, range 5279.3087-5430.0518)
+[shifted] Johnson-shifted + elimination-tree query: 0.8899 ms (median of 5, range 0.8865-0.9019) per query, agrees 100/100
+[shifted] Johnson-shifted + Dijkstra-based CCH query: 2.6290 ms (median of 5, range 2.6269-2.6471) per query, 3004 settled/query, agrees 100/100
+[shifted] Johnson-shifted + Dijkstra-based CCH query + stall-on-demand: 2.4356 ms (median of 5, range 2.4320-2.4456) per query, 1581 settled/query, agrees 100/100
+[shifted] parallel customization (16 threads, 3763 levels): 5980.0629 ms (median of 5, range 5890.0316-6025.2948), speed-up 0.84x, arcs differing from serial (exact comparison): 0

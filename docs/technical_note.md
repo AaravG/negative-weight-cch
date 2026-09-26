@@ -1,6 +1,6 @@
 # Potential-Free Customizable Contraction Hierarchies for Road Networks with Negative Edge Weights
 
-**Working draft, shared for feedback.** Whether this observation is already known in the CCH community has not yet been confirmed. Corrections and pointers to prior work are very welcome (please open an issue).
+**Working draft, partly superseded** (see `results/results_pruning.md` and `results/cpp_*.txt` for current results). Whether this observation is already known in the CCH community has not yet been confirmed. Corrections and pointers to prior work are very welcome (please open an issue).
 
 *Author: Aarav Gupta*
 
@@ -310,7 +310,7 @@ A potential-free CCH for the full USA graph was not built. The prototype's in-me
 - **Scale.** The full-USA CCH still needs to be built, which requires a compact memory layout.
 - **Synthetic energy model.** Real elevation data (e.g. SRTM) and a calibrated EV consumption model are needed.
 - **Battery constraints.** State-of-charge bounds make path costs non-additive, as noted in the Scope paragraph of §1. Whether CCH customization can be lifted to the bounded cost functions of Baum et al. without a potential is open.
-- **Acceleration techniques (measured, `results/results_pruning.md`).** Perfect customization stays exact with negative weights (0 mismatches in 3,618 arc distances). Witness pruning stays exact when arcs may only be removed via *upper or intermediate* triangles, i.e. detours through higher-ranked vertices (0 of 225 queries wrong, about 60% of arc directions still removable); allowing detours through lower-ranked vertices breaks it. Stall-on-demand is unsafe: in 850 observed cases a vertex would have been stalled although its sweep label was already exact.
+- **Acceleration techniques.** Superseded: see `results/results_pruning.md` (stall-on-demand is exact; Dijkstra-based queries, distance pruning and early termination fail; the witness-pruning and tie-update conditions are standard CCH conditions, not negative-weight effects).
 - **Parallel customization** carries over unchanged (level-synchronous processing does not depend on sign).
 - **Turn costs, one-to-many queries.** Not studied.
 

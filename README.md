@@ -84,19 +84,11 @@ Full tables are in [`results/`](results); every table from every run is collecte
 
 ## Which CCH acceleration techniques survive?
 
-[`results/results_pruning.md`](results/results_pruning.md):
+Details and reproduction: [`results/results_pruning.md`](results/results_pruning.md) (`python/test_techniques.py`).
 
-| Technique | Verdict |
-|---|---|
-| Basic customization, elimination-tree query | work (proved and tested) |
-| Perfect customization | works: 0 mismatches in 3,618 arc distances |
-| Witness pruning | works if arcs are removed only via upper/intermediate triangles (~60% of arc directions still removable) |
-| Path unpacking | works: 140/140 paths are real edge sequences of exactly the shortest length |
-| Partial updates (recompute variant) | works: identical to full customization in every run |
-| Tie-based partial updates (CCH paper §7.7) | works once they also propagate improvements, not only witness ties |
-| Parallel customization by levels | bit-identical to serial; 1.6–1.9× on NY, no gain at USA scale in our push-based variant |
-| **Stall-on-demand** | **unsafe** (850 observed cases where an exact label would have been stalled) |
-| **Dijkstra-ordered queries and stopping rules** | **unsafe** |
+- **Exact:** basic customization and the elimination-tree query, stall-on-demand, perfect customization, witness pruning (without zero-length cycles, as for non-negative weights), path unpacking, partial updates, level-parallel customization.
+- **Fail (3-vertex counterexamples):** Dijkstra-based queries, the distance pruning of the elimination-tree query, and early termination.
+- **New:** a feasible potential can be read off the customized CCH in two linear sweeps (0.33-0.36 s on the USA vs 1.3-2.6 s Bellman-Ford).
 
 ## Battery constraints
 
