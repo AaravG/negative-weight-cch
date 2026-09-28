@@ -44,15 +44,15 @@ Proofs, complexity and limitations: [`docs/technical_note.md`](docs/technical_no
 
 All answers are verified against independent references: Bellman–Ford on the small graphs, and Johnson + Dijkstra (itself validated against Bellman–Ford) on the large ones.
 
-**C++, real elevation** ([`results/results_cpp.md`](results/results_cpp.md))
+**C++, medians of 5 runs** (NY/BAY: real elevation `ev_real`; USA: synthetic `ev`; raw logs in [`results/cpp_*.txt`](results), summary via `scripts/summarize_cpp.py`)
 
-| Graph | Customization (no potential) | Our query | Classical CCH query (Dijkstra + stalling) | Johnson + Dijkstra |
-|---|---:|---:|---:|---:|
-| New York (264k nodes) | 0.04 s | **0.013 ms** | 0.076 ms | 16 ms |
-| SF Bay Area (321k) | 0.03 s | **0.007 ms** | 0.049 ms | 13 ms |
-| **Full USA (23.9M nodes, 58.3M arcs)** | **5.8 s** | **0.62 ms** | 2.69 ms | 1,577 ms |
+| Graph | Customization (no potential) | Johnson potential (Bellman–Ford) | Potential read off the CCH | ET query | Dijkstra-based CCH query (Johnson-shifted, + stall) |
+|---|---:|---:|---:|---:|---:|
+| New York (264k nodes) | 43.8 ms | 16.1 ms | 4.2 ms | 15.5 µs | 74.8 µs |
+| SF Bay Area (321k) | 31.0 ms | 48.6 ms | 4.4 ms | 7.4 µs | 37.9 µs |
+| **Full USA (23.9M nodes, 58.3M arcs)** | **5.34 s** | 2.58 s | 0.36 s | **0.94 ms** | 2.43 ms |
 
-The classical variants also need a potential first: Johnson's costs 1.3–2.6 s on the USA; a height-induced one is free but only exists for simple cost models. The query gain itself comes from the sweep query rather than from dropping the potential — what the potential-free variant removes is the potential computation. One-time, weight-independent ordering: 2.8 s (NY), 20 min (USA).
+The elimination-tree (ET) query takes the same time with or without a potential; what the potential-free pipeline removes is the potential computation (and where a height-induced potential exists, there is no speed difference at all). All 1,000 queries per metric on NY/BAY and 100 per metric on the USA were verified. One-time, weight-independent ordering: 3.0 s (NY), 2.9 s (BAY), 20 min (USA).
 
 **Three implementations of the same algorithms** (New York)
 
